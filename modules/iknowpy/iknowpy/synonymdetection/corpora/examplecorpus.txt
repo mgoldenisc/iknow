@@ -1,0 +1,6 @@
+This is an example corpus.
+It will not actually provide data useful for training a model.
+It has been used to train the model that contained within this repository.
+The vectors in that model are essentially random, and are certainly useless for any real testing
+Unfortunately, real models are far too large to upload to GitHub!
+
