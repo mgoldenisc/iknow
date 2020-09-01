@@ -171,11 +171,11 @@ class IKFastTextTools(IKSimilarityTools):
     def __init__(self, pmodel_name): 
 
         try:
-            wv = ft.load_facebook_vectors(self.__PATH_PREFIX__ + pmodel_name + '.bin')
+            self.wordvectors = ft.load_facebook_vectors(self.__PATH_PREFIX__ + pmodel_name + '.bin')
         except FileNotFoundError as err:
             raise FileNotFoundError('No model found with name %s' % pmodel_name) from err
         
-        super().__init__(pmodel_name, wv)
+        self.model_name = pmodel_name
 
 
     def load_vectors(self, pmodel_name):

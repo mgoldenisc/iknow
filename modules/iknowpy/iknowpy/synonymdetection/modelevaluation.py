@@ -1,6 +1,5 @@
-from scipy import stats
 import csv
-from iksimilarity import IKSimilarityTools as IKST
+from iksimilarity import IKFastTextTools as IKST
 from iksimilarityw2v import IKWord2VecTools as IKW2V
 import os
 
