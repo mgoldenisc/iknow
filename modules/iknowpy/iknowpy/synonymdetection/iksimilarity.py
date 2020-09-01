@@ -361,7 +361,7 @@ class IKFastTextModeling:
 
 
 
-class IKWord2VecTools:
+class IKWord2VecTools(IKSimilarityTools):
     """ Class description
     """
     __PATH_PREFIX__ = 'models/word2vec/vectors/'
