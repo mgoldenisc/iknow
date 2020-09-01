@@ -82,7 +82,7 @@ class IKSimilarityTools(object):
         return (score[1][0], score[2])
     
 
-    def get_synonym_dict(self, source_text=None, use_iknow_entities=True, num_similar=5):
+    def get_synonym_dict(self, source_text, use_iknow_entities=True, num_similar=5):
         """ Uses currently loaded model to determine a SOURCE-TEXT-SPECIFIC dictionary of
         synonyms.
 
@@ -189,8 +189,9 @@ class IKFastTextTools(IKSimilarityTools):
         """
         try:
             self.wordvectors = ft.load_facebook_vectors(self.__PATH_PREFIX__ + pmodel_name + '.bin')
-        except FileNotFoundError:
-            print("Model with name {} not found\n".format(pmodel_name))
+        except FileNotFoundError as err:
+            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
+        old=self.model_name)) from err
 
 
         
@@ -387,9 +388,9 @@ class IKWord2VecTools(IKSimilarityTools):
 
         try:
             self.wordvectors = W2VKV.load_word2vec_format(self.__PATH_PREFIX__ + pmodel_name + '.bin', binary=True)
-        except FileNotFoundError:
-            print("Model with name {} not found\n".format(pmodel_name))
-            print("Continuing use of vectors for currently loaded model ({})".format(self.model_name))
+        except FileNotFoundError as err:
+            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
+        old=self.model_name)) from err
 
 
 class IKWord2VecModeling:
@@ -492,7 +493,7 @@ class IKWord2VecModeling:
             os.remove(IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
             os.remove(IKWord2VecModeling.__VECTOR_PATH_PREFIX__ + pmodel_name + ".bin")
             
-            Word2Vec.save(model, path=IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
+            model.save(fname_or_handle=IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
             model.wv.save_word2vec_format(IKWord2VecModeling.__VECTOR_PATH_PREFIX__ + pmodel_name + ".bin", binary=True)
             
         except FileNotFoundError as err:
