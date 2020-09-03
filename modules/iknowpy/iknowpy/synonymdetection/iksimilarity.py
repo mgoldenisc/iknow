@@ -82,7 +82,7 @@ class IKSimilarityTools(object):
         return (score[1][0], score[2])
     
 
-    def get_synonym_dict(self, source_text, use_iknow_entities=True, num_similar=5):
+    def synonym_dict_from_string(self, source_text, use_iknow_entities=True, num_similar=5):
         """ Uses currently loaded model to determine a SOURCE-TEXT-SPECIFIC dictionary of
         synonyms.
 
@@ -90,7 +90,7 @@ class IKSimilarityTools(object):
         --------------
         use_iknow_entities (bool) - whether to find synonyms for iKnow entities (as opposed to words)
 
-        source_text (str) - Either a path to a corpus OR a text source itself
+        source_text (str) - A free string text source
 
         num_similar (int) - Number of similar words that will be checked against to determine if there are
         any synonyms in the text. Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
@@ -107,22 +107,60 @@ class IKSimilarityTools(object):
         if use_iknow_entities:
             # index the source with iknow entities
             engine = iknowpy.iKnowEngine()
-            if os.path.isfile(os.fsencode(source_text)):
-                for line in open(source_text , 'r'):
-                    engine.index(line, 'en')
-                    # Populate dictionary with keys for each term, all with empty list for value
-                    for s in engine.m_index['sentences']:
-                        for e in s['entities']:
-                            if (e['type'] in ('PathRelevant', 'NonRelevant')) or (e['index'] in dictionary):
-                                continue
-                            else:
-                                try:
-                                    dictionary[e['index']] = [self.most_similar(e['index'], num_similar=num_similar)] \
-                                        if num_similar == 1 else self.most_similar(e['index'], num_similar=num_similar)
-                                except KeyError:
-                                    continue
-            else:
-                engine.index(source_text, 'en')
+            engine.index(source_text, 'en')
+            # Populate dictionary with keys for each term, all with empty list for value
+            for s in engine.m_index['sentences']:
+                for e in s['entities']:
+                    if (e['type'] in ('PathRelevant', 'NonRelevant')) or (e['index'] in dictionary):
+                        continue
+                    else:
+                        try:
+                            dictionary[e['index']] = [self.most_similar(e['index'], num_similar=num_similar)] \
+                                if num_similar == 1 else self.most_similar(e['index'], num_similar=num_similar)
+                        except KeyError:
+                            continue
+        else:
+            # use words instead of entities
+            words = source_text.split(' ')
+            for word in words:
+                if word in dictionary: continue
+                else:
+                    try:
+                        dictionary[word] = [self.most_similar(word, num_similar=num_similar)] \
+                            if num_similar == 1 else self.most_similar(word, num_similar=num_similar)
+                    except KeyError:
+                        continue
+
+        return dictionary
+
+
+    def synonym_dict_from_file(self, source_text, use_iknow_entities=True, num_similar=5):
+        """ Uses currently loaded model to determine a SOURCE-TEXT-SPECIFIC dictionary of
+        synonyms.
+
+        Parameters
+        --------------
+        use_iknow_entities (bool) - whether to find synonyms for iKnow entities (as opposed to words)
+
+        source_text (str) - The path to a file containing the source text
+
+        num_similar (int) - Number of similar words that will be checked against to determine if there are
+        any synonyms in the text. Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
+
+
+        Returns
+        --------------
+        a dictionary of synonyms for each entity or word in the source
+
+        TODO: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
+        their individual components.
+        """
+        dictionary = {}
+        if use_iknow_entities:
+            # index the source with iknow entities
+            engine = iknowpy.iKnowEngine()
+            for line in open(source_text , 'r'):
+                engine.index(line, 'en')
                 # Populate dictionary with keys for each term, all with empty list for value
                 for s in engine.m_index['sentences']:
                     for e in s['entities']:
@@ -136,19 +174,8 @@ class IKSimilarityTools(object):
                                 continue
         else:
             # use words instead of entities
-            if os.path.isfile(os.fsencode(source_text)):
-                for line in open(source_text, 'r'):
-                    words = line.split(' ')
-                    for word in words:
-                        if word in dictionary: continue
-                        else:
-                            try:
-                                dictionary[word] = [self.most_similar(word, num_similar=num_similar)] \
-                                    if num_similar == 1 else self.most_similar(word, num_similar=num_similar)
-                            except KeyError:
-                                continue
-            else:
-                words = source_text.split(' ')
+            for line in open(source_text, 'r'):
+                words = line.split(' ')
                 for word in words:
                     if word in dictionary: continue
                     else:
@@ -157,7 +184,6 @@ class IKSimilarityTools(object):
                                 if num_similar == 1 else self.most_similar(word, num_similar=num_similar)
                         except KeyError:
                             continue
-
         return dictionary
 
 
@@ -194,54 +220,49 @@ class IKFastTextTools(IKSimilarityTools):
         old=self.model_name)) from err
 
 
-        
-class IKFastTextModeling:
-    """ Class Description
+
+class IKWord2VecTools(IKSimilarityTools):
+    """ Class description
     """
+    __PATH_PREFIX__ = 'models/word2vec/vectors/'
 
-    __PATH_PREFIX__ = 'models/fasttext/'
+    def __init__(self, pmodel_name='IKDefaultModel'):
+        try:
+            self.wordvectors = W2VKV.load_word2vec_format(self.__PATH_PREFIX__ + pmodel_name + '.bin', binary=True)
+        except FileNotFoundError as err:
+            raise FileNotFoundError('No model found with name {}'.format(pmodel_name)) from err
+
+        self.model_name = pmodel_name # Keeps track of what model is at use
 
 
-    @staticmethod
-    def create_new_model(corpus_path, pmodel_name, epochs=5, pmin_count=10, psize=150):
-        """ Creates and trains (and optionally saves) a model using gensim's implementation 
-        of the fastText algorithm, and then loads the KeyedVectors associated with that model.
-        
-        For CREATION/first time training only. To continue training an already existing
-        model, use update_model().
+    def load_vectors(self, pmodel_name):
+        """ Loads the VECTORS of an already trained model. It is much quicker and 
+        less cumbersome to use just vectors than to use the model itself, but
+        still comes with the various important syntactic/semantic tools.
 
         Parameters
         -----------
-        corpus_path (str) - path to the corpus you wish to train the model with
-        
-        pmodel_name (str) - the name to be assigned to the model when saved. Must be unique
-        or error will be raised to avoid overwriting an existing model
-
-        epochs (int, optional) - Number of times to iterate over training corpus during training
-
-        pmin_count (int, optional) - Minimum frequency for a word to be used in training
-
-        psize (int, optional) - Size of vectors for training
-
-        Returns:
-        -----------
-        True if model created/trained, False if could not be created
-
-        Raises
-        -----------
-        FileNotFoundError - If corpus_path not found
-        RuntimeError - If training an already existing model that makes it past first if statement. This
-        is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
+        pmodel_name (str) - Name of the model to load vectors from
         """
-        if os.path.exists(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin'):
-            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name))
-        
-        model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
 
+        try:
+            self.wordvectors = W2VKV.load_word2vec_format(self.__PATH_PREFIX__ + pmodel_name + '.bin', binary=True)
+        except FileNotFoundError as err:
+            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
+        old=self.model_name)) from err
+
+
+
+
+class IKSimilarityModeling(object):
+
+    @staticmethod
+    def create_new_model(corpus_path, model, epochs=5, iknow_preprocess=True, tokenize_concepts=True):
         print('Building vocabulary...\n')
         # build vocabulary
         try:
-            model.build_vocab(corpus_file=corpus_path)
+            corpus_path = SentenceIterator(corpus_path=corpus_path, iknow_preprocess=iknow_preprocess, tokenize_concepts=tokenize_concepts)
+            model.build_vocab(sentences=corpus_path)
         except FileNotFoundError as err:
             raise FileNotFoundError('No corpus found at %s' % corpus_path) from err
         except RuntimeError as err:
@@ -251,58 +272,24 @@ class IKFastTextModeling:
         print('Training model...\n')
         # train the model
         model.train(
-            corpus_file=corpus_path, epochs=epochs, total_words=model.corpus_total_words
+            sentences=corpus_path, epochs=epochs, total_examples=model.corpus_count
         )
 
         print('Finished training model.\n')
 
-        ft.save_facebook_model(model, path=IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
-        return True
-
-
     @staticmethod
-    def update_model(corpus_path, pmodel_name):
-        """ Updates an already existing model by continuing its training
-        on a new corpus.
+    def update_model(corpus_path, model, use_iknow_entities, tokenize_concepts):
+        # Must update the vocabulary of unique words in the corpus prior to training
+        # Note that you MUST pass in update=True to not destroy existing form of the model
+        sentences = SentenceIterator(corpus_path, iknow_preprocess=use_iknow_entities, tokenize_concepts=tokenize_concepts)
 
-        Parameters
-        -----------
-        corpus_path (str) - path to the corpus being used to update the model
+        old_count = model.corpus_count
+        model.build_vocab(sentences=sentences, update=True)
         
-        pmodel_name (str, optional) - The name of the model to be updated, defaults to the
-        model currently in use
-
-        Return
-        -----------
-        True if model was updated, else False
-
-        Raises
-        -----------
-        FileNotFoundError - if corpus or model not found
-        """
-
-        try:
-            model = ft.load_facebook_model(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
-            old_words = model.corpus_total_words
-
-            # Must update the vocabulary of unique words in the corpus prior to training
-            # Note that you MUST pass in update=True to not destroy existing form of the model
-            model.build_vocab(corpus_file=corpus_path, update=True)
-
-            new_words_update = model.corpus_total_words - old_words
-            
-            model.train(
-                corpus_file=corpus_path, total_words=new_words_update, 
-                epochs=model.epochs
-            )
-
-            # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
-            os.remove(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
-            
-            ft.save_facebook_model(model, path=IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
-            
-        except FileNotFoundError as err:
-            raise FileNotFoundError("Model could not be updated, check specified corpus and model names") from err
+        model.train(
+            sentences=sentences, total_examples=model.corpus_count - old_count, 
+            epochs=model.epochs
+        )
 
 
     @staticmethod
@@ -361,39 +348,93 @@ class IKFastTextModeling:
         corpus_output_file.close()
 
 
-
-class IKWord2VecTools(IKSimilarityTools):
-    """ Class description
+        
+class IKFastTextModeling(IKSimilarityModeling):
+    """ Class Description
     """
-    __PATH_PREFIX__ = 'models/word2vec/vectors/'
 
-    def __init__(self, pmodel_name='IKDefaultModel'):
-        try:
-            self.wordvectors = W2VKV.load_word2vec_format(self.__PATH_PREFIX__ + pmodel_name + '.bin', binary=True)
-        except FileNotFoundError as err:
-            raise FileNotFoundError('No model found with name {}'.format(pmodel_name)) from err
-
-        self.model_name = pmodel_name # Keeps track of what model is at use
+    __PATH_PREFIX__ = 'models/fasttext/'
 
 
-    def load_vectors(self, pmodel_name):
-        """ Loads the VECTORS of an already trained model. It is much quicker and 
-        less cumbersome to use just vectors than to use the model itself, but
-        still comes with the various important syntactic/semantic tools.
+    @staticmethod
+    def create_new_model(corpus_path, pmodel_name, epochs=5, pmin_count=10, psize=150):
+        """ Creates and trains (and optionally saves) a model using gensim's implementation 
+        of the fastText algorithm, and then loads the KeyedVectors associated with that model.
+        
+        For CREATION/first time training only. To continue training an already existing
+        model, use update_model().
 
         Parameters
         -----------
-        pmodel_name (str) - Name of the model to load vectors from
+        corpus_path (str) - path to the corpus you wish to train the model with
+        
+        pmodel_name (str) - the name to be assigned to the model when saved. Must be unique
+        or error will be raised to avoid overwriting an existing model
+
+        epochs (int, optional) - Number of times to iterate over training corpus during training
+
+        pmin_count (int, optional) - Minimum frequency for a word to be used in training
+
+        psize (int, optional) - Size of vectors for training
+
+        Returns:
+        -----------
+        True if model created/trained, False if could not be created
+
+        Raises
+        -----------
+        FileNotFoundError - If corpus_path not found
+        RuntimeError - If training an already existing model that makes it past first if statement. This
+        is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
+        """
+        if os.path.exists(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin'):
+            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name))
+        
+        model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
+
+        super().create_new_model(corpus_path, model, epochs)
+
+        ft.save_facebook_model(model, path=IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
+        return True
+
+
+    @staticmethod
+    def update_model(corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True):
+        """ Updates an already existing model by continuing its training
+        on a new corpus.
+
+        Parameters
+        -----------
+        corpus_path (str) - path to the corpus being used to update the model
+        
+        pmodel_name (str, optional) - The name of the model to be updated, defaults to the
+        model currently in use
+
+        Return
+        -----------
+        True if model was updated, else False
+
+        Raises
+        -----------
+        FileNotFoundError - if corpus or model not found
         """
 
         try:
-            self.wordvectors = W2VKV.load_word2vec_format(self.__PATH_PREFIX__ + pmodel_name + '.bin', binary=True)
+            model = ft.load_facebook_model(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
+
+            super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
+
+            # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
+            os.remove(IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
+            
+            ft.save_facebook_model(model, path=IKFastTextModeling.__PATH_PREFIX__ + pmodel_name + '.bin')
+            
         except FileNotFoundError as err:
-            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
-        old=self.model_name)) from err
+            raise FileNotFoundError("Model could not be updated, check specified corpus and model names") from err
 
 
-class IKWord2VecModeling:
+
+class IKWord2VecModeling(IKSimilarityModeling):
     __MODEL_PATH_PREFIX__ = 'models/word2vec/trained_models/'
     __VECTOR_PATH_PREFIX__ = 'models/word2vec/vectors/'
 
@@ -429,22 +470,7 @@ class IKWord2VecModeling:
         
         model = Word2Vec(size=psize, sg=1, min_count=pmin_count)
 
-        print('Building vocabulary...\n')
-        # build vocabulary
-        try:
-            model.build_vocab(corpus_file=corpus_path)
-        except FileNotFoundError as err:
-            raise FileNotFoundError('No corpus found at {}'.format(corpus_path)) from err
-        except RuntimeError as err:
-            raise RuntimeError("Model could not be trained. If you are attempting to continue training an exisiting model, call update_model()") from err
-        
-        print('Finished building vocabulary.\n')
-        print('Training model...\n')
-        # train the model
-        model.train(
-            corpus_file=corpus_path, epochs=epochs, total_words=model.corpus_total_words
-        )
-        print('Finished training model.\n')
+        super().create_new_model(corpus_path, model, epochs)
 
         if updateable:
             model.save(IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
@@ -454,7 +480,7 @@ class IKWord2VecModeling:
 
 
     @staticmethod
-    def update_model(corpus_path, pmodel_name):
+    def update_model(corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True):
         """ Updates an already existing model by continuing its training
         on a new corpus.
 
@@ -476,18 +502,8 @@ class IKWord2VecModeling:
 
         try:
             model = Word2Vec.load(IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
-            old_words = model.corpus_total_words
-
-            # Must update the vocabulary of unique words in the corpus prior to training
-            # Note that you MUST pass in update=True to not destroy existing form of the model
-            model.build_vocab(corpus_file=corpus_path, update=True)
-
-            new_words_update = model.corpus_total_words - old_words
             
-            model.train(
-                corpus_file=corpus_path, total_words=new_words_update, 
-                epochs=model.epochs
-            )
+            super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
 
             # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
             os.remove(IKWord2VecModeling.__MODEL_PATH_PREFIX__ + pmodel_name)
@@ -500,57 +516,57 @@ class IKWord2VecModeling:
             raise FileNotFoundError("Model could not be updated, check specified corpus and model names") from err
 
 
-    @staticmethod
-    def iknow_index_corpus_preprocessor(tokenize_concepts, corpus_path=None, output_corpus_name='iknow_preprocessed_corpus.txt'):
-        """ Indexes the training corpus using iKnow Engine. Replaces
-        multiword entities with singular tokens (e.g. acute pulmonary hypertension 
-        -> acute_pulmonary_hypertension). Builds a dictionary of synonyms
-        based on synonym marking relations (e.g. "also called"). Removes
-        N onRelevants from the corpus.
-        
+
+class SentenceIterator(object):
+    """ An iterator to handle a training corpus that is on multiple files with a given
+        directory. 
+
+        This is necessary to interface with gensim when your corpus is split across files.
+
         Parameters
         -----------
-        corpus_path (str) - Path to the corpus to be indexed
+        corpus_path (str) - A path to a file or a directory containing multiple corpus files
 
-        output_corpus_name (str) - File in which processed output should be written 
+        iknow_preprocess (bool) - If True, preprocess lines of the corpus using iKnow enginge so that
+        only path relevant entities will be included for training
 
-        Output
-        -----------
-        New file in corpora directory with the name output_corpus_name
-        """
-        engine = iknowpy.iKnowEngine()
-        corpus_output_file = open('corpora/' + output_corpus_name, 'a+')
-        # Handles a corpus spread across multiple files in a directory
-        if os.path.isdir(os.fsencode(corpus_path)):
-            directory = os.fsencode(corpus_path)
-            for file in os.listdir(directory):
-                print('Working on a new file.')
-                filename = corpus_path + '/' + os.fsdecode(file)
-                try:
-                    # This would hopefully be easier/quicker with direct access to iKnow domain?
-                    for line in open(filename):
-                        engine.index(line, 'en')
-                        for s in engine.m_index['sentences']:
+        tokenize_concepts (bool) - If True, when preprocessing lines from the corpus with iKnow engine, 
+        replace concepts with singular tokens (e.g. heart attack -> heart_attack)
+    """
+    def __init__(self, corpus_path, iknow_preprocess, tokenize_concepts):
+        self.corpus_path = corpus_path
+        self.is_dir = os.path.isdir(corpus_path)
+        self.tokenize_concepts = tokenize_concepts
+        if iknow_preprocess:
+            self.iknow_preprocess = iknow_preprocess
+            self.engine = iknowpy.iKnowEngine()
+ 
+    def __iter__(self):
+        if self.is_dir:
+            for fname in os.listdir(self.corpus_path):
+                for line in open(os.path.join(self.corpus_path, fname)):
+                    if self.iknow_preprocess:
+                        self.engine.index(line, 'en')
+                        for s in self.engine.m_index['sentences']:
+                            sent = []
                             for p in s['path']:
-                                if s['entities'][p]['type'] == 'Concept' and tokenize_concepts:
-                                    corpus_output_file.write(s['entities'][p]['index'].replace(" ", "_") + ' ')
+                                if s['entities'][p]['type'] == 'Concept' and self.tokenize_concepts:
+                                    sent.append(s['entities'][p]['index'].replace(" ", "_")) 
                                 else:
-                                    corpus_output_file.write(s['entities'][p]['index'] + ' ')
-                        corpus_output_file.write('\n')
-                except UnicodeDecodeError:
-                    continue
-        # Handles a singular corpus file
+                                    sent.append(s['entities'][p]['index'])
+                            yield sent
+                    else:
+                        yield line.split()
         else:
-            try:
-                for line in open(corpus_path):
-                    engine.index(line, 'en')
-                    for s in engine.m_index['sentences']:
+            for line in open(self.corpus_path):
+                if self.iknow_preprocess:
+                    self.engine.index(line, 'en')
+                    sent = []
+                    for s in self.engine.m_index['sentences']:
                         for p in s['path']:
-                            if s['entities'][p]['type'] == 'Concept':
-                                corpus_output_file.write(s['entities'][p]['index'].replace(" ", "_") + ' ')
+                            if s['entities'][p]['type'] == 'Concept' and self.tokenize_concepts:
+                                sent.append(s['entities'][p]['index'].replace(" ", "_")) 
                             else:
-                                corpus_output_file.write(s['entities'][p]['index'] + ' ')
-                corpus_output_file.write('\n')
-            except UnicodeDecodeError:
-                pass
-        corpus_output_file.close()
+                                sent.append(s['entities'][p]['index'])
+                else:
+                    yield line.split()
