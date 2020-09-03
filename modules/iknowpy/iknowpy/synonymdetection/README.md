@@ -70,16 +70,16 @@ We can check of any words, even if they are not in the model. In those cases, we
     -1
 
 ### Getting a dictionary of synonyms
-If we had some source text (a corpus or a string), we could get a dictionary containing the top similar words for each word in that text. We could also get the top synonyms for each iKnow entity in the source text passed in, but note that this won't be of much use here because (a) this model wasn't trained on an iKnow preprocessed corpus and (b) it is Word2Vec, so it cannot build a vector for an iKnow entity it has not explicitly seen before (and it will have seen none, other than singule-word entities).
-
+If we had some source text (a corpus or a string), we could get a dictionary containing the top similar words for each word in that text. We could also get the top synonyms for each iKnow entity in the source text passed in, but note that this won't be of much use here because (a) this model wasn't trained on an iKnow preprocessed corpus and (b) it is Word2Vec, so it cannot build a vector for an iKnow entity it has not explicitly seen before (and it will have seen none, other than singule-word entities). There are two different methods: synonym_dict_from_string() and synonym_dict_from_file(). The former is used below, and the source text is a free string passed in:
+ 
     >>> source_text = 'This is an example sentence'
-    >>> demo_tool.get_synonym_dict(source_text=source_text, use_iknow_entities=False)
+    >>> demo_tool.synonym_dict_from_string(source_text=source_text, use_iknow_entities=False)
     {'This': ['within', 'used', 'corpus.', 'GitHub!', 'has'], 'is': ['in', 'to', 'testing', 'The', 'corpus.'], 'an': ['The', 'large', 'will', 'to', 'real'], 'example': ['contained', 'used', 'has', 'vectors', 'testing']}
 
-Note that since sentence wasn't in the models vocabulary, it was not able to return synonyms for it. Instead of a string, we could also pass in the path to a file. Let's say the example corpus this model was trained on. The returned dictionary is too large to print here without making things too dirty, so I abbreviated it.
+Note that since sentence wasn't in the models vocabulary, it was not able to return synonyms for it. We can accomplish the same thing with the path to a file instead of a free string using the synonym_dict_from_file() method. Here, I use the example corpus this model was trained on, which you should also have in your corpora directory. The returned dictionary is too large to print here without making things too dirty, so I abbreviated it.
 
     >>> source_text = 'corpora/examplecorpus.txt'
-    >>> demo_tool.get_synonym_dict(source_text=source_text, use_iknow_entities=False)
+    >>> demo_tool.synonym_dict_from_file(source_text=source_text, use_iknow_entities=False)
     {'This': ['within', 'used', 'corpus.', 'GitHub!', 'has'], 'is': ['in', 'to', 'testing', 'The', 'corpus.'], 'an': ['The', 'large', 'will', 'to', 'real'], 'example': ['contained', 'used', 'has', 'vectors', 'testing'], 'It': ['large', 'data', 'essentially', 'corpus.', 'useless'], 'will': ['training', 'any', 'far', 'contained', 'this'], 'not': ['actually', 'Unfortunately,', 'GitHub!', 'for', 'model']
     ...
 
