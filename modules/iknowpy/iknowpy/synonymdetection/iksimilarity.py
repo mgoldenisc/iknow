@@ -18,6 +18,10 @@ class IKSimilarityTools(object):
         term is multiple words, input as a string with each word separated by spaces. 
         For example "acute pulmonary hypertension"
 
+        This method will check if a tokenized version of the input term is in the dictionary.
+        If it is, it will use that to evaluate synonyms, otherwise it will provide a list of
+        the words in the term and find words that correspond with that list.
+
         Parameters
         -----------
         term (str) - The term (word, entity, etc) for which we want to find the most similar matches.
@@ -30,28 +34,36 @@ class IKSimilarityTools(object):
         -----------
         The top word (str) OR a list of the top words if num_similar > 1
         """
-        try:
-            gensimpairs = self.wordvectors.most_similar(term, topn=num_similar)
-        except KeyError as err:
-            # KeyError raised when term (fastText: and all ngrams) are NOT found in the vector space
-            raise KeyError("{} is not in the vocabulary and a vector could not be found/computed".format(term)) from err
-        
-        return gensimpairs[0][0] if len(gensimpairs) == 1 else [pair[0] for pair in gensimpairs]
+        if term.replace(" ", "_") in self.wordvectors.vocab:
+            gensimpairs = self.wordvectors.most_similar(term.replace(" ", "_"), topn=num_similar)
+        else:
+            try:
+                positives = term.split()
+                gensimpairs = self.wordvectors.most_similar(positive=positives, topn=num_similar)
+            except KeyError as err:
+                # KeyError raised when term (fastText: and all ngrams) are NOT found in the vector space
+                raise KeyError("{} is not in the vocabulary and a vector could not be found/computed".format(term)) from err
+
+        return [pair[0].replace("_", " ") for pair in gensimpairs]
     
 
-    def get_similarity(self, word1, word2):
+    def get_similarity(self, term1, term2):
         """ Gets cosine similarity of word1 and word2
 
         Parameters
         -----------
-        word1, word2 (str) - The two words for which one wishes to calculate cosine similarity
+        term1, term2 (str) - The two terms for which one wishes to calculate cosine similarity.
+        If using a tokenized model, these can be multi-word phrases (which will be tokenized by 
+        this method), otherwise must be a word.
 
         Returns
         -----------
         Float [0,1] where 0 = not similar and 1 = identical, -1 if can't be calculated
         """
         try:
-            sim = self.wordvectors.similarity(word1, word2)
+            term1 = term1.replace(" ", "_")
+            term2 = term2.replace(" ", "_")
+            sim = self.wordvectors.similarity(term1, term2)
             return sim
         except KeyError:
             return -1
