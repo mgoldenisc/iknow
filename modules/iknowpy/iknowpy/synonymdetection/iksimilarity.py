@@ -415,7 +415,7 @@ class IKFastTextModeling(IKSimilarityModeling):
                 pmodel_name = pmodel_name + '.bin'
 
         if os.path.exists(os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name)):
-            raise FileExistsError("Model named {} already exists, model could not be created".format([pmodel_name[:-4]))
+            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
         model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
 
