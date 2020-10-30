@@ -208,9 +208,11 @@ class IKFastTextTools(IKSimilarityTools):
         Contains methods to access exisiting models and evaluate similarity.
     """
 
-    __PATH_PREFIX__ = os.path.join('models', 'fasttext')
+    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'fasttext')
 
-    def __init__(self, pmodel_name): 
+    def __init__(self, pmodel_name, installdir=''): 
+
+        if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
 
         try:
             if pmodel_name[-4:] != '.bin':
@@ -218,7 +220,7 @@ class IKFastTextTools(IKSimilarityTools):
             self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name))
         except FileNotFoundError as err:
             raise FileNotFoundError('No model found with name %s' % pmodel_name) from err
-        
+
         self.model_name = pmodel_name
 
 
@@ -244,9 +246,12 @@ class IKFastTextTools(IKSimilarityTools):
 class IKWord2VecTools(IKSimilarityTools):
     """ Class description
     """
-    __PATH_PREFIX__ = os.path.join('models', 'word2vec', 'vectors')
+    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'vectors')
 
-    def __init__(self, pmodel_name='IKDefaultModel'):
+    def __init__(self, pmodel_name='IKDefaultModel', installdir=''):
+        
+        if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
+
         try:
             if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
@@ -376,11 +381,11 @@ class IKFastTextModeling(IKSimilarityModeling):
     """ Class Description
     """
 
-    __PATH_PREFIX__ = os.path.join('models', 'fasttext')
+    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'fasttext')
 
 
     @classmethod
-    def create_new_model(cls, corpus_path, pmodel_name, epochs=5, pmin_count=10, psize=150):
+    def create_new_model(cls, corpus_path, pmodel_name, epochs=5, pmin_count=10, psize=150, installdir=''):
         """ Creates and trains (and optionally saves) a model using gensim's implementation 
         of the fastText algorithm, and then loads the KeyedVectors associated with that model.
         
@@ -410,23 +415,25 @@ class IKFastTextModeling(IKSimilarityModeling):
         RuntimeError - If training an already existing model that makes it past first if statement. This
         is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
         """
+        if installdir != '':
+            model_path = installdir + IKFastTextModeling.__PATH_PREFIX__
 
         if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
 
-        if os.path.exists(os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name)):
+        if os.path.exists(os.path.join(model_path, pmodel_name)):
             raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
         model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
 
         super().create_new_model(corpus_path, model, epochs)
 
-        ft.save_facebook_model(model, path=os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name))
+        ft.save_facebook_model(model, path=os.path.join(model_path, pmodel_name))
         return True
 
 
     @classmethod
-    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True):
+    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True, installdir=''):
         """ Updates an already existing model by continuing its training
         on a new corpus.
 
@@ -446,10 +453,12 @@ class IKFastTextModeling(IKSimilarityModeling):
         FileNotFoundError - if corpus or model not found
         """
 
+        model_path = installdir + IKFastTextModeling.__PATH_PREFIX__
+
         try:
             if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
-            path = os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name)
+            path = os.path.join(model_path, pmodel_name)
             model = ft.load_facebook_model(path)
 
             super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
@@ -465,12 +474,12 @@ class IKFastTextModeling(IKSimilarityModeling):
 
 
 class IKWord2VecModeling(IKSimilarityModeling):
-    __MODEL_PATH_PREFIX__ = os.path.join('models', 'word2vec', 'trained_models')
-    __VECTOR_PATH_PREFIX__ = os.path.join('models', 'word2vec', 'vectors')
+    __MODEL_PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'trained_models')
+    __VECTOR_PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'vectors')
 
     
     @classmethod
-    def create_new_model(cls, corpus_path, pmodel_name, updateable=True, epochs=5, pmin_count=5, psize=300):
+    def create_new_model(cls, corpus_path, pmodel_name, updateable=True, epochs=5, pmin_count=5, psize=300, installdir=''):
         """ Creates and trains (and optionally saves) a model using gensim's implementation 
         of the fastText algorithm, and then loads the KeyedVectors associated with that model.
         
@@ -494,11 +503,15 @@ class IKWord2VecModeling(IKSimilarityModeling):
         RuntimeError - If training an already existing model that makes it past first if statement. This
         is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
         """
+        if installdir != '':
+            model_path = installdir + IKWord2VecModeling.__MODEL_PATH_PREFIX__
+            vector_path = installdir + IKWord2VecModeling.__VECTOR_PATH_PREFIX__
+        
         if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
 
         # check if same name model exists by checking for vectors because vectors are always saved
-        if os.path.exists(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name)):
+        if os.path.exists(os.path.join(vector_path, pmodel_name)):
             raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
         model = Word2Vec(size=psize, sg=1, min_count=pmin_count)
@@ -506,14 +519,14 @@ class IKWord2VecModeling(IKSimilarityModeling):
         super().create_new_model(corpus_path, model, epochs)
 
         if updateable:
-            model.save(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
+            model.save(os.path.join(model_path, pmodel_name[:-4]))
 
-        model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name), binary=True)
+        model.wv.save_word2vec_format(os.path.join(vector_path, pmodel_name), binary=True)
         return True
 
 
     @classmethod
-    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True):
+    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True, installdir=''):
         """ Updates an already existing model by continuing its training
         on a new corpus.
 
@@ -532,20 +545,23 @@ class IKWord2VecModeling(IKSimilarityModeling):
         -----------
         FileNotFoundError - if corpus or model not found
         """
+        if installdir != '':
+            model_path = installdir + IKWord2VecModeling.__MODEL_PATH_PREFIX__
+            vector_path = installdir + IKWord2VecModeling.__VECTOR_PATH_PREFIX__
 
         try:
             if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
-            model = Word2Vec.load(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
+            model = Word2Vec.load(os.path.join(model_path, pmodel_name[:-4]))
             
             super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
 
             # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
-            os.remove(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
-            os.remove(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name))
+            os.remove(os.path.join(model_path, pmodel_name[:-4]))
+            os.remove(os.path.join(vector_path, pmodel_name))
             
-            model.save(fname_or_handle=os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
-            model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name), binary=True)
+            model.save(fname_or_handle=os.path.join(model_path, pmodel_name[:-4]))
+            model.wv.save_word2vec_format(os.path.join(vector_path, pmodel_name), binary=True)
             
         except FileNotFoundError as err:
             raise FileNotFoundError("Model could not be updated, check specified corpus and model names") from err
