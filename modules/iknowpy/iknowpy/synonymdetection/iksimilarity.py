@@ -9,6 +9,8 @@ import os
 class IKSimilarityTools(object):
     
     def __init__(self, pmodel_name, wv):
+        if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
         self.model_name = pmodel_name
         self.wordvectors = wv
 
@@ -32,7 +34,7 @@ class IKSimilarityTools(object):
 
         Returns
         -----------
-        The top word (str) OR a list of the top words if num_similar > 1
+        A list of the top words
         """
         if term.replace(" ", "_") in self.wordvectors.vocab:
             gensimpairs = self.wordvectors.most_similar(term.replace(" ", "_"), topn=num_similar)
@@ -95,25 +97,25 @@ class IKSimilarityTools(object):
     
 
     def synonym_dict_from_string(self, source_text, use_iknow_entities=True, num_similar=5):
-        """ Uses currently loaded model to determine a SOURCE-TEXT-SPECIFIC dictionary of
-        synonyms.
+        """ Uses currently loaded model to determine a dictionary of synonyms for each word or
+        entity in a provided string.
 
         Parameters
         --------------
-        use_iknow_entities (bool) - whether to find synonyms for iKnow entities (as opposed to words)
+        use_iknow_entities (bool) - whether to find synonyms for iKnow entities in the string (as opposed to words)
 
         source_text (str) - A free string text source
 
-        num_similar (int) - Number of similar words that will be checked against to determine if there are
-        any synonyms in the text. Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
+        num_similar (int) - Number of similar words that will be returned for each term in the source text (if exist).
+        Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
 
 
         Returns
         --------------
         a dictionary of synonyms for each entity or word in the source
 
-        TODO: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
-        their individual components.
+        Note: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
+        their individual components. So it is one or the other
         """
         dictionary = {}
         if use_iknow_entities:
@@ -147,8 +149,8 @@ class IKSimilarityTools(object):
 
 
     def synonym_dict_from_file(self, source_text, use_iknow_entities=True, num_similar=5):
-        """ Uses currently loaded model to determine a SOURCE-TEXT-SPECIFIC dictionary of
-        synonyms.
+        """ Uses currently loaded model to determine a dictionary of synonyms for each word or
+        entity in a provided text file.
 
         Parameters
         --------------
@@ -156,16 +158,16 @@ class IKSimilarityTools(object):
 
         source_text (str) - The path to a file containing the source text
 
-        num_similar (int) - Number of similar words that will be checked against to determine if there are
-        any synonyms in the text. Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
+        num_similar (int) - Number of similar words that will be returned for each term in the source text (if exist).
+        Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
 
 
         Returns
         --------------
         a dictionary of synonyms for each entity or word in the source
 
-        TODO: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
-        their individual components.
+        Note: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
+        their individual components. So it is one or the other.
         """
         dictionary = {}
         if use_iknow_entities:
@@ -201,7 +203,9 @@ class IKSimilarityTools(object):
 
 
 class IKFastTextTools(IKSimilarityTools):
-    """ Class description
+    """ Subclass of IKSimilarityTools
+
+        Contains methods to access exisiting models and evaluate similarity.
     """
 
     __PATH_PREFIX__ = os.path.join('models', 'fasttext')
@@ -209,7 +213,9 @@ class IKFastTextTools(IKSimilarityTools):
     def __init__(self, pmodel_name): 
 
         try:
-            self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name + '.bin'))
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name))
         except FileNotFoundError as err:
             raise FileNotFoundError('No model found with name %s' % pmodel_name) from err
         
@@ -226,10 +232,12 @@ class IKFastTextTools(IKSimilarityTools):
         pmodel_name (str) - Name of the model to load vectors from
         """
         try:
-            self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name + '.bin'))
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name))
         except FileNotFoundError as err:
-            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
-        old=self.model_name)) from err
+            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name[:-4], 
+        old=self.model_name[:-4])) from err
 
 
 
@@ -240,9 +248,11 @@ class IKWord2VecTools(IKSimilarityTools):
 
     def __init__(self, pmodel_name='IKDefaultModel'):
         try:
-            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name + '.bin'), binary=True)
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
         except FileNotFoundError as err:
-            raise FileNotFoundError('No model found with name {}'.format(pmodel_name)) from err
+            raise FileNotFoundError('No model found with name {}'.format(pmodel_name[:-4])) from err
 
         self.model_name = pmodel_name # Keeps track of what model is at use
 
@@ -258,10 +268,12 @@ class IKWord2VecTools(IKSimilarityTools):
         """
 
         try:
-            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name + '.bin'), binary=True)
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
         except FileNotFoundError as err:
-            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name, 
-        old=self.model_name)) from err
+            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name[:-4], 
+        old=self.model_name[:-4])) from err
 
 
 
@@ -398,14 +410,18 @@ class IKFastTextModeling(IKSimilarityModeling):
         RuntimeError - If training an already existing model that makes it past first if statement. This
         is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
         """
-        if os.path.exists(os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name + '.bin')):
-            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name))
+
+        if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+
+        if os.path.exists(os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name)):
+            raise FileExistsError("Model named {} already exists, model could not be created".format([pmodel_name[:-4]))
         
         model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
 
         super().create_new_model(corpus_path, model, epochs)
 
-        ft.save_facebook_model(model, path=os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name + '.bin'))
+        ft.save_facebook_model(model, path=os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name))
         return True
 
 
@@ -431,7 +447,9 @@ class IKFastTextModeling(IKSimilarityModeling):
         """
 
         try:
-            path = os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name + '.bin')
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            path = os.path.join(IKFastTextModeling.__PATH_PREFIX__, pmodel_name)
             model = ft.load_facebook_model(path)
 
             super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
@@ -476,18 +494,21 @@ class IKWord2VecModeling(IKSimilarityModeling):
         RuntimeError - If training an already existing model that makes it past first if statement. This
         is because build_vocab raises RuntimeError if building existing vocab without update=True (see update_model)
         """
+        if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+
         # check if same name model exists by checking for vectors because vectors are always saved
-        if os.path.exists(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name + '.bin')):
-            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name))
+        if os.path.exists(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name)):
+            raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
         model = Word2Vec(size=psize, sg=1, min_count=pmin_count)
 
         super().create_new_model(corpus_path, model, epochs)
 
         if updateable:
-            model.save(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name))
+            model.save(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
 
-        model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name + '.bin'), binary=True)
+        model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name), binary=True)
         return True
 
 
@@ -513,16 +534,18 @@ class IKWord2VecModeling(IKSimilarityModeling):
         """
 
         try:
-            model = Word2Vec.load(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name))
+            if pmodel_name[-4:] != '.bin':
+                pmodel_name = pmodel_name + '.bin'
+            model = Word2Vec.load(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
             
             super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
 
             # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
-            os.remove(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name))
-            os.remove(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name + ".bin"))
+            os.remove(os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
+            os.remove(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name))
             
-            model.save(fname_or_handle=os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name))
-            model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name + ".bin"), binary=True)
+            model.save(fname_or_handle=os.path.join(IKWord2VecModeling.__MODEL_PATH_PREFIX__, pmodel_name[:-4]))
+            model.wv.save_word2vec_format(os.path.join(IKWord2VecModeling.__VECTOR_PATH_PREFIX__, pmodel_name), binary=True)
             
         except FileNotFoundError as err:
             raise FileNotFoundError("Model could not be updated, check specified corpus and model names") from err
@@ -548,9 +571,9 @@ class SentenceIterator(object):
     def __init__(self, corpus_path, iknow_preprocess, tokenize_concepts):
         self.corpus_path = corpus_path
         self.is_dir = os.path.isdir(corpus_path)
-        self.tokenize_concepts = tokenize_concepts
         if iknow_preprocess:
             self.iknow_preprocess = iknow_preprocess
+            self.tokenize_concepts = tokenize_concepts
             self.engine = iknowpy.iKnowEngine()
  
     def __iter__(self):

@@ -118,7 +118,7 @@ This model will now be saved under the name 'ft_example', available for use.
 <sup>1</sup> *This 1.2GB figure is daunting, and for good reason. But a lot of this space seems due to the amount needed in general for a model. I'd say it's akin to renting a storage unit: even if you only have a couple of things to store, the smallest possible unit might still be too big for your stuff. A fastText model trained on a much larger corpus clocks in at about 2.4GB when saved in this format on my machine, so it only doubles in size but explodes much larger in terms of encoded information and performance*
 
 ### Retraining a model
-For a final display, let's go back to the Word2Vec model <sup>2</sup>. Recall that it couldn't provide us with a similarity for 'model' and 'cowabunga', because it hadn't seen the word cowabunga. We'll retrain with a "corpus" (one sentence) and see what happens after:
+For a final display, let's go back to the Word2Vec model. Recall that it couldn't provide us with a similarity for 'model' and 'cowabunga', because it hadn't seen the word cowabunga. We'll retrain with a "corpus" (one sentence) and see what happens after:
 
     >>> exit()
     $ touch corpora/examplecorpus2.txt
@@ -131,7 +131,5 @@ For a final display, let's go back to the Word2Vec model <sup>2</sup>. Recall th
     0.0015065705
 
 This shows us that 'cowabunga' has been added to the vocabulary thanks to the retraining!
-
-<sup>2</sup> *The retraining functionality is currently giving me problems with fastText due to problems loading a model (vs. just vectors) from the current stored format. I'm looking into it now (9/2), but those of you that get curious and play around more should beware.*
 
 There may be some updates to come while I fix/change some things in the module. Comments, advice, criticism, errors etc are all welcome, and you can feel free to message me on Teams about anything.
