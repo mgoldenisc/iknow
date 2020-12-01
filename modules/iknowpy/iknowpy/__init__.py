@@ -1,2 +1,3 @@
 from .version import __version__
-from .engine import iKnowEngine
+from .labels import Labels
+from .engine import iKnowEngine, UserDictionary

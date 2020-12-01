@@ -106,7 +106,7 @@ void a_short_demo(void);
 
 int main(int argc, char* argv[])
 {
-	testing::iKnowUnitTests::runUnitTests(); // first, verify the quality
+	testing::iKnowUnitTests::runUnitTests(); // first, run existing unit tests
 	
 	// currently supported languages : { "en", "de", "ru", "es", "fr", "ja", "nl", "pt", "sv", "uk", "cs" };
 	const std::set<std::string> languages_set = iKnowEngine::GetLanguagesSet();
@@ -123,6 +123,8 @@ int main(int argc, char* argv[])
 		os.close();
 
 		a_short_demo();
+
+		cout << endl << "*** All tests passed succesfully ***" << endl;
 	}
 	catch (std::exception& e)
 	{
@@ -131,6 +133,7 @@ int main(int argc, char* argv[])
 	catch (...) {
 		cerr << "Smart Indexer failed..." << std::endl;
 	}
+
 	return 0;
 }
 
@@ -162,8 +165,8 @@ void a_short_demo(void)
 	for (SentenceIterator it_sent = engine.m_index.sentences.begin(); it_sent != engine.m_index.sentences.end(); ++it_sent) { // loop over the sentences
 		const Sentence& sent = *it_sent; // get a sentence reference
 
-		const size_t start = sent.offset_start(); // start position of the text
-		const size_t stop = sent.offset_stop(); // stop position of the text
+		const size_t start = sent.offset_start(); // start position of the sentence
+		const size_t stop = sent.offset_stop(); // stop position of the sentence
 
 		String SentenceText(&Text_Source[start], &Text_Source[stop]); // reconstruct the sentence
 		std::string SentenceTextUtf8 = IkStringEncoding::BaseToUTF8(SentenceText); // convert it back to utf8
@@ -252,7 +255,7 @@ void a_short_demo(void)
 	for (Text_Source::Proximity::iterator itProx = engine.m_index.proximity.begin(); itProx != engine.m_index.proximity.end(); ++itProx) {
 		size_t id1 = itProx->first.first;
 		size_t id2 = itProx->first.second;
-		double proximity = itProx->second;
+		double proximity = static_cast<double>(itProx->second);
 
 		cout << "\"" << mapTextSource[id1] << "\":\"" << mapTextSource[id2] << "\"=" << proximity << endl;
 	}

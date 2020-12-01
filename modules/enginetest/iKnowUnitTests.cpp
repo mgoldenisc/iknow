@@ -1,6 +1,7 @@
 ﻿#include "iKnowUnitTests.h"
 #include "engine.h"
 
+#include <cctype>
 #include <stdexcept>
 #include <iostream>
 #include <map>
@@ -15,15 +16,32 @@ using namespace iknowdata;
 
 void iKnowUnitTests::runUnitTests(void)
 {
-	const char *pError=NULL;
+	const char* pError = NULL;
 	try {
 		iKnowUnitTests test_collection;
 		pError = "Japanese output must generate entity vectors";
 		test_collection.test1(pError);
 		pError = "Only one measurement attribute in example English text";
 		test_collection.test2(pError);
-		pError = "3 Sentence Attribute markers in sentence";
+		pError = "4 Sentence Attribute markers in sentence";
 		test_collection.test3(pError);
+		pError = "Test on SBegin/SEnd labels";
+		test_collection.test4(pError);
+		pError = "Test on User Dictionary (UDCT)";
+		test_collection.test5(pError);
+		pError = "Test on Text Normalizer";
+		test_collection.test6(pError);
+		pError = "Issue31 : https://github.com/intersystems/iknow/issues/31";
+		test_collection.test7(pError);
+		pError = "Issue37 : https://github.com/intersystems/iknow/issues/37";
+		test_collection.test8(pError);
+		pError = "Issue41 : https://github.com/intersystems/iknow/issues/41";
+		test_collection.Issue41(pError);
+		pError = "Issue39 : https://github.com/intersystems/iknow/issues/39";
+		test_collection.Issue39(pError);
+		pError = "Issue42 : https://github.com/intersystems/iknow/issues/42";
+		test_collection.Issue42(pError);
+
 	}
 	catch (std::exception& e) {
 		cerr << "*** Unit Test Failure ***" << endl;
@@ -35,6 +53,321 @@ void iKnowUnitTests::runUnitTests(void)
 		exit(-1);
 	}
 }
+
+/* Issue#42
+When an entity contains more than one marker of the same type, e.g.two Negation markers or two DateTime markers, the m_index property in the Python interface outputs them as two separate items.It would be better to collect them into one item.
+
+Example 1 : Il n'y avaient jamais des chiens.
+concerned entity : n'y avaient pas
+attribute output :
+[{'type': 'Negation', 'offset_start' : 5, 'offset_stop' : 8, 'marker' : "n'y", 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 1},
+{ 'type': 'Negation', 'offset_start' : 17, 'offset_stop' : 23, 'marker' : 'jamais', 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 1 }]
+
+Example 2 : These reports are for the 1997 - 1998 academic year.
+concerned entity : 1997 - 1998 academic year
+attribute output :
+[{'type': 'DateTime', 'offset_start' : 28, 'offset_stop' : 37, 'marker' : '1997-1998', 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 4}, 
+{ 'type': 'DateTime', 'offset_start' : 47, 'offset_stop' : 52, 'marker' : 'year.', 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 4 }]
+*/
+void iKnowUnitTests::Issue42(const char* pMessage) // https://github.com/intersystems/iknow/issues/42
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"Il n'y avaient jamais des chiens.");
+	engine.index(text_source, "fr");
+	const Sentence& sent1 = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent1.sent_attributes.begin(); it_marker != sent1.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Negation) {
+			if (attribute.marker_ != string("n'y jamais"))
+				throw std::runtime_error("Negation marker not correct !" + string(pMessage));
+		}
+	}
+	text_source = IkStringEncoding::UTF8ToBase(u8"These reports are for the 1997 - 1998 academic year.");
+	engine.index(text_source, "en");
+	const Sentence& sent2 = *engine.m_index.sentences.begin(); // get sentence reference
+	count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent2.sent_attributes.begin(); it_marker != sent2.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == DateTime) {
+			if (!(attribute.marker_ == string("1997") || attribute.marker_ == string("1998 year.")))
+				throw std::runtime_error("DateTime marker not correct !" + string(pMessage));
+		}
+	}
+}
+
+
+/* Issue#39
+* The Frequency attribute for 'daily' is missing in the RAW output for the following example:
+input:
+60 mg daily
+-> attributes: attr type="measurement" literal="60 mg daily" token="60 mg" value="60" unit="mg"
+
+While avoiding giving specific sales figures, Bond told reporters that Asda's 2007 total sales came in at 8%-10%, and about 1% ahead of its target.
+IR: <attr type="measurement" literal="8%-10%," token="8%-10%," value="8" unit="%" value2="10" unit2="%">
+GH: <attr type="measurement" literal="8%-10%," token="8%-10%," value="8%-10%">
+
+On   31-MAY-2001,   after   over a year   without  any  pain killers,  the  patient   took   two "twenty milligram" tablets   and  the  next day,   "all hell   broke   loose."
+IR: <attr type="measurement" literal="two "twenty milligram" tablets" token="two "twenty milligram"" value="two" value2="twenty" unit2="milligram">
+GH: <attr type="measurement" literal="two "twenty milligram" tablets" token="two "twenty milligram"" value="two" unit="milligram" value2="twenty">
+
+*/
+void iKnowUnitTests::Issue39(const char* pMessage) // https://github.com/intersystems/iknow/issues/39
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"60 mg daily");
+	engine.index(text_source, "en");
+	const Sentence& sent = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent.sent_attributes.begin(); it_marker != sent.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Measurement) {
+			if (attribute.value_ != string("60") || attribute.unit_ != string("mg"))
+				throw std::runtime_error("Measurement attribute not correct !" + string(pMessage));
+		}
+		if (attribute.type_ == Frequency) {
+			if (attribute.marker_ != string("daily"))
+				throw std::runtime_error("Frequency attribute not correct !" + string(pMessage));
+		}
+	}
+	String text2_source = IkStringEncoding::UTF8ToBase(u8"While avoiding giving specific sales figures, Bond told reporters that Asda's 2007 total sales came in at 8%-10%, and about 1% ahead of its target.");
+	engine.index(text2_source, "en");
+	const Sentence& sent2 = *engine.m_index.sentences.begin(); // get sentence reference
+	count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent2.sent_attributes.begin(); it_marker != sent2.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Measurement) {
+			if (attribute.value_ != string("8") || attribute.unit_ != string("%") || attribute.value2_ != string("10") || attribute.unit2_ != string("%"))
+				throw std::runtime_error("Measurement attribute not correct !" + string(pMessage));
+			break;
+		}
+	}
+	String text3_source = IkStringEncoding::UTF8ToBase(u8"On   31-MAY-2001,   after   over a year   without  any  pain killers,  the  patient   took   two \"twenty milligram\" tablets   and  the  next day,   \"all hell   broke   loose.\"");
+	engine.index(text3_source, "en");
+	const Sentence& sent3 = *engine.m_index.sentences.begin(); // get sentence reference
+	count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent3.sent_attributes.begin(); it_marker != sent3.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Measurement) {
+			if (attribute.value_ != string("two") || attribute.unit_ != string("") || attribute.value2_ != string("twenty") || attribute.unit2_ != string("milligram"))
+				throw std::runtime_error("Measurement attribute not correct !" + string(pMessage));
+			break;
+		}
+	}
+
+}
+
+/* Issue#41
+SThe baby weighs 7 pounds 7 ounces.
+<attr type = "measurement" literal = "7 pounds 7 ounces." token = "7 pounds 7 ounces." value = "7" unit = "pounds" value2 = "7" unit2 = "ounces">
+*/
+void iKnowUnitTests::Issue41(const char* pMessage) // https://github.com/intersystems/iknow/issues/41
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"The baby weighs 7 pounds 7 ounces.");
+	engine.index(text_source, "en");
+	const Sentence& sent = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent.sent_attributes.begin(); it_marker != sent.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Measurement) {
+			if (attribute.value_ != string("7") || attribute.unit_ != string("pounds") || attribute.value2_ != string("7") || attribute.unit2_ != "ounces")
+				throw std::runtime_error("Measurement attribute not correct !" + string(pMessage));
+		}
+	}
+}
+
+/* Issue#37
+The Certainty attribute in the English language model has a marker, spanand level.When using the m_index property in the Python interface, the marker can be found through['sent_attributes'], the span through['path_attributes'].The level, currently either 0 (uncertain) or 9 (certain), should be in['sent_attributes'] too, but it is missing.
+Example :
+	Input = "This might be a problem."
+	['sent_attributes'] = [{'type': 'Certainty', 'offset_start' : 7, 'offset_stop' : 12, 'marker' : 'might', 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 1}]
+*/
+void iKnowUnitTests::test8(const char* pMessage) // https://github.com/intersystems/iknow/issues/37
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"This might be a problem.");
+	engine.index(text_source, "en");
+	const Sentence& sent = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent.sent_attributes.begin(); it_marker != sent.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Certainty && attribute.value_ != string("0"))
+			throw std::runtime_error("Certainty attribute has no level 0 defined !" + string(pMessage));
+	}
+}
+
+/*
+* If Furigana handling in Japanese is switched off ("FuriganaHandling;off" in metadata.csv), this test will ***FAIL***
+*/
+void iKnowUnitTests::test7(const char* pMessage) // https://github.com/intersystems/iknow/issues/31
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"北海道・阿寒（あかん）湖温泉で自然体験ツアーに出かけた。"); //  = > All Hiragana
+	engine.index(text_source, "ja", true);
+	bool bFurigana = false;
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		if (it->find("LexrepCreated") != string::npos && it->find("type=Nonrelevant") != string::npos) {
+			if (it->find(u8"index=\"（あかん）\"") != string::npos)
+				bFurigana = true;
+		}
+	}
+	if (bFurigana == false)
+		throw std::runtime_error("Furigana ***not*** detected !" + string(pMessage));
+
+	text_source = IkStringEncoding::UTF8ToBase(u8"黎智英（ジミー・ライ）氏や民主活動家の周庭（アグネス・チョウ）氏が逮捕された。"); //  = > All Katakana
+	bFurigana = false;
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		if (it->find("LexrepCreated") != string::npos && it->find("type=Nonrelevant") != string::npos) {
+			if (it->find(u8"index=\"（ジミー・ライ）\"") != string::npos)
+				bFurigana = true;
+		}
+	}
+	if (bFurigana == true)
+		throw std::runtime_error("Furigana detected in all Katakana text!" + string(pMessage));
+
+	text_source = IkStringEncoding::UTF8ToBase(u8"将棋の高校生プロ、藤井聡太棋聖（18）がまたしても金字塔を打ち立てた。"); // = > All Numbers
+	bFurigana = false;
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		if (it->find("LexrepCreated") != string::npos && it->find("type=Nonrelevant") != string::npos) {
+			if (it->find(u8"index=\"（18）\"") != string::npos)
+				bFurigana = true;
+		}
+	}
+	if (bFurigana == true)
+		throw std::runtime_error("Furigana detected in all Numeric text!" + string(pMessage));
+}
+/*
+The Certainty attribute in the English language model has a marker, spanand level.When using the m_index property in the Python interface, the marker can be found through['sent_attributes'], the span through['path_attributes'].The level, currently either 0 (uncertain) or 9 (certain), should be in['sent_attributes'] too, but it is missing.
+Example :
+	Input = "This might be a problem."
+	['sent_attributes'] = [{'type': 'Certainty', 'offset_start' : 7, 'offset_stop' : 12, 'marker' : 'might', 'value' : '', 'unit' : '', 'value2' : '', 'unit2' : '', 'entity_ref' : 1}]
+*/
+// std::string NormalizeText(std::string& text_source, const std::string& language, bool bUserDct = false, bool bLowerCase = true, bool bStripPunct = true);
+void iKnowUnitTests::test6(const char* pMessage) {
+	string text_source = u8"WE WANT THIS TEXT LOWERCASED !";
+	string text_lowercased = iKnowEngine::NormalizeText(text_source, "en");
+
+	if (std::count_if(text_lowercased.begin(), text_lowercased.end(), [](unsigned char c) { return isupper(c); }) > 0) // 
+		throw std::runtime_error("NormalizeText does not work correctly");
+}
+
+void iKnowUnitTests::test5(const char* pMessage) { // User DCT test 
+	string text_source_utf8 = u8"The Fr. test was er/pr positive after a long week.";
+	String text_source(IkStringEncoding::UTF8ToBase(text_source_utf8));
+
+	iKnowEngine engine;
+	UserDictionary user_dictionary;
+	user_dictionary.addLabel("er/pr positive", "UDPosSentiment"); // : @er/pr positive,UDPosSentiment
+	if (user_dictionary.addLabel("some text", "LabelThatDoesNotExist") != iKnowEngine::iknow_unknown_label)
+		throw std::runtime_error(string("Unknow label *not* triggered !"));
+	user_dictionary.addLabel("a long week", "UDConcept;UDTime"); // : multiple UD labels can be combined
+
+	user_dictionary.addSEndCondition("Fr.", false); // ;;Ph.D.;0;
+	engine.loadUserDictionary(user_dictionary);
+	engine.index(text_source, "en", true); // traces should show UDPosSentiment
+
+	if (engine.m_index.sentences.size() > 1) // "Fr." must not split the sentence
+		throw std::runtime_error(string(pMessage));
+
+	// Check for Positive Sentiment markers
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		// cout << *it << endl;
+		// +[12]	"UserDictionaryMatch:<lexrep id=6 type=Unknown value=\"er/pr\" index=\"er/pr\" labels=\"UDPosSentiment;ENCon;\" />;"	std::string
+		// +[13]	"UserDictionaryMatch:<lexrep id=7 type=Unknown value=\"positive.\" index=\"positive\" labels=\"UDPosSentiment;ENCon;\" />;"	std::string
+		if (it->find("UserDictionaryMatch") != string::npos) {
+			string& trace_userdct = (*it);
+			if (trace_userdct.find("value=\"er/pr\"") != string::npos) {
+				if (trace_userdct.find("UDPosSentiment") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+			if (trace_userdct.find("value=\"positive.\"") != string::npos) {
+				if (trace_userdct.find("UDPosSentiment") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+			if (trace_userdct.find("a long week") != string::npos) {
+				if (trace_userdct.find("UDConcept;UDTime;") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+		}
+	}
+	engine.unloadUserDictionary();
+
+	user_dictionary.clear();
+	user_dictionary.addLabel("some text", "UDUnit");
+	user_dictionary.addSEndCondition("Fr.", false);
+	user_dictionary.addConceptTerm("one concept");
+	user_dictionary.addRelationTerm("one relation");
+	user_dictionary.addNonrelevantTerm("crap");
+	user_dictionary.addNegationTerm("w/o");
+	user_dictionary.addPositiveSentimentTerm("great");
+	user_dictionary.addNegativeSentimentTerm("awfull");
+	user_dictionary.addUnitTerm("Hg");
+	user_dictionary.addNumberTerm("magic number");
+	user_dictionary.addTimeTerm("future");
+
+	engine.loadUserDictionary(user_dictionary);
+	String text_source2(IkStringEncoding::UTF8ToBase("some text Fr. w/o one concept and crap one relation that's great and awfull, magic number 3 Hg from future"));
+
+	engine.index(text_source2, "en", true); // generate Traces
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+			if (it->find("UserDictionaryMatch") != string::npos) {
+				string& trace_userdct = (*it);
+				if (trace_userdct.find("value=\"w/o\"") != string::npos) {
+					if (trace_userdct.find("UDNegation") == string::npos)
+						throw std::runtime_error(string(pMessage));
+				}
+				if (trace_userdct.find("value=\"awfull,\"") != string::npos) {
+					if (trace_userdct.find("UDNegSentiment") == string::npos)
+						throw std::runtime_error(string(pMessage));
+				}
+				if (trace_userdct.find("value=\"Hg\"") != string::npos) {
+					if (trace_userdct.find("UDUnit") == string::npos)
+						throw std::runtime_error(string(pMessage));
+				}
+			}
+	}
+}
+
+void iKnowUnitTests::test4(const char* pMessage) { // Naomi detects missing SBegin/SEnd labels
+	string text_source_utf8 = u8"The position of the window made it very unlikely that this was a random passerby.";
+	String text_source(IkStringEncoding::UTF8ToBase(text_source_utf8));
+	iKnowEngine engine;
+	engine.index(text_source, "en", true); // traces should contain SBegin/SEnd labels
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		if (it->find("LexrepIdentified") != string::npos) {
+			string& trace_sbegin = (*it);
+			if (trace_sbegin.find("labels=\"SBegin;\"") == string::npos) // first should be SBegin
+				throw std::runtime_error(string(pMessage));
+			while ((it + 1)->find("LexrepIdentified") != string::npos)
+				++it;
+			string& trace_send = (*it);
+			if (trace_send.find("labels=\"SEnd;\"") == string::npos) // last should be SEnd
+				throw std::runtime_error(string(pMessage));
+		}
+	}
+	const Sentence& sent = *engine.m_index.sentences.begin(); // get the sentence reference
+	const Path_Attribute& attribute_expansion = *sent.path_attributes.begin(); // path attribute
+	if (attribute_expansion.type != Certainty)
+		throw std::runtime_error(string("No certainty attribute detected !"));
+	if (attribute_expansion.pos != 5)
+		throw std::runtime_error(string("Position of certainty attribute must be 5 !"));
+	if (attribute_expansion.span != 5) // TODO: this value is *not* correct.
+		throw std::runtime_error(string("Span of certainty attribute must be 5 !"));
+}
+
 void iKnowUnitTests::test3(const char* pMessage) { // Only one measurement attribute in example text : verify correctness
 	string text_source_utf8 = "Now, I have been on many walking holidays, but never on one where I have my bags ferried\nfrom hotel to hotel while I simply get on with the job of walkingand enjoying myself.";
 	// <attr type = "measurement" literal = "hundreds of feet" token = "hundreds of feet" value = "hundreds of" unit = "feet">
@@ -52,9 +385,9 @@ void iKnowUnitTests::test3(const char* pMessage) { // Only one measurement attri
 		String literal(&text_source[start_literal], &text_source[stop_literal]);
 
 		string strMarker = attribute.marker_;
-		int count_upper = std::count_if(strMarker.begin(), strMarker.end(), [](unsigned char c) { return std::isupper(c); }); // Useless, I know...
+		int count_upper = (int) std::count_if(strMarker.begin(), strMarker.end(), [](unsigned char c) { return std::isupper(c); }); // Useless, I know...
 	}
-	if (count_attributes!=3) {
+	if (count_attributes!=4) {
 		throw std::runtime_error(string(pMessage));
 	}
 
@@ -122,7 +455,7 @@ void iKnowUnitTests::test1(const char *pMessage) { // Japanese text should produ
 	for (Text_Source::Proximity::iterator itProx = engine.m_index.proximity.begin(); itProx != engine.m_index.proximity.end(); ++itProx) {
 		size_t id1 = itProx->first.first;
 		size_t id2 = itProx->first.second;
-		double proximity = itProx->second;
+		double proximity = static_cast<double>(itProx->second);
 
 		// cout << "\"" << mapTextSource[id1] << "\":\"" << mapTextSource[id2] << "\"=" << proximity << endl;
 
@@ -133,7 +466,7 @@ void iKnowUnitTests::test1(const char *pMessage) { // Japanese text should produ
 	// Top 10 dominant terms :
 	typedef pair<int, double> EntDomType;
 	vector<EntDomType> vecDominantConcepts;
-	for_each(mapDominantConcepts.begin(), mapDominantConcepts.end(), [&vecDominantConcepts](pair<const size_t,double>& ent_par) { vecDominantConcepts.push_back(make_pair(ent_par.first, ent_par.second)); });
+	for_each(mapDominantConcepts.begin(), mapDominantConcepts.end(), [&vecDominantConcepts](pair<const size_t,double>& ent_par) { vecDominantConcepts.push_back(make_pair((int)ent_par.first, (double)ent_par.second)); });
 	sort(vecDominantConcepts.begin(), vecDominantConcepts.end(), [](EntDomType& a, EntDomType& b) { return a.second > b.second;  });
 	for (vector<EntDomType>::iterator itDom = vecDominantConcepts.begin(); itDom != vecDominantConcepts.end(); ++itDom) {
 		// cout << "\"" << mapTextSource[itDom->first] << "\" DOM=" << itDom->second << endl;

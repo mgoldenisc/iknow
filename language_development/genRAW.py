@@ -2,28 +2,20 @@
 ''' genRAW.py tool for generating linguistic reference material
     Usage: "python genRAW.py <text files directory> <output directory> <language>"
     Example (on Windows): "python genRAW.py C:/TextCorpus/English/Financial/ C:/Raw/English/ en
-
-    Remark : output of Path attributes does not work yet.
 '''
 
-import sys
+# import the usual suspects...
+import sys, os, pprint, time
 
-# for local language development, adapt next line to your local situation, and uncomment next 2 lines 
-# sys.path.insert(0, 'C:/Users/jdenys/source/repos/iknow/kit/x64/Release/bin')
-# import engine as iknowpy
-# for "pip install iknowpy", next line will do, outcomment for local language development
+# run "pip install iknowpy" if "import iknowpy" fails.
 import iknowpy
-
-import os
-import pprint
-import time
 
 #
 # Following are default runtime parameters if no command line parameters are present.
 #
-in_path_par = "C:/P4/Users/jdenys/text_input_data/ja/"  # input directory with text files
+in_path_par = "C:/P4/Users/jdenys/text_input_data/en/"  # input directory with text files
 out_path_par = "C:/tmp/"                                # output directory to write the RAW file
-language_par = "ja"                                     # language selector
+language_par = "en"                                     # language selector
 OldStyle = True                                         # mimics the old-style RAW file format
 
 # print(sys.argv)
@@ -44,19 +36,21 @@ def write_ln(file_,text_):
 #
 from os import walk
 
-f = []  # non-recursive list of files
+f = []  # non-recursive list of files, .txt only
 for (dirpath, dirnames, filenames) in walk(in_path_par):
     for single_file in filenames:
-        full_path = dirpath + single_file
-        f.append(full_path)
+        if (single_file.endswith('.txt')):
+            full_path = dirpath + single_file
+            f.append(full_path)
     break
 
-f_rec = []  # recursive list of files
+f_rec = []  # recursive list of files, .txt only
 def collect_files_recursive(in_path_par):
     for (dirpath, dirnames, filenames) in walk(in_path_par):
         for single_file in filenames:
-            full_path = dirpath + single_file
-            f_rec.append(full_path)
+            if (single_file.endswith('.txt')):
+                full_path = dirpath + single_file
+                f_rec.append(full_path)
         for single_dir in dirnames:
             full_dir = dirpath + single_dir + "/"
             collect_files_recursive(full_dir)
@@ -82,12 +76,8 @@ for text_file in f_rec:
     else:
         write_ln(f_raw,'\n<D name=\"'+text_file+'\" file=\"'+in_path_par+text_file+'\">') # D050_sentences.txtC:\P4\Users\jdenys\text_input_data\ja\050_sentences.txt
     
-    f_text = open(text_file, "rb")
-    header = f_text.read(3)
-    if (header == b'\xef\xbb\xbf'): #Utf8 BOM
-        header = b''    # remove BOM
-    text = header + f_text.read() # read text, must be utf8 encoded
-    text = text.decode('utf8') # decode text to Unicode
+    f_text = open(text_file,"r",True,"utf8") # open text file, must be utf8 encoded
+    text = f_text.read() # read text
     f_text.close()
 
     engine.index(text, language_par)
@@ -97,17 +87,35 @@ for text_file in f_rec:
         #
         if OldStyle:
             sentence_raw = 'S\x01'
+            ent_stop = ''
             for entity in sent['entities']:
                 ent_type = entity['type']
                 lit_text = text[entity['offset_start']:entity['offset_stop']]
+                ent_start = entity['offset_start']
                 if ent_type == 'NonRelevant':
-                    sentence_raw = sentence_raw + lit_text
+                    if (ent_start != ent_stop):
+                        sentence_raw = sentence_raw + lit_text
+                    else:
+                        sentence_raw = sentence_raw.rstrip() + lit_text
+                    ent_stop = entity['offset_stop']
                 if ent_type == 'Concept':
-                    sentence_raw = sentence_raw + '\x02' + lit_text + '\x02'
+                    if(ent_start != ent_stop):
+                        sentence_raw = sentence_raw + '\x02' + lit_text + '\x02'
+                    else:
+                        sentence_raw = sentence_raw.rstrip() + '\x02' + lit_text + '\x02'
+                    ent_stop = entity['offset_stop']
                 if ent_type == 'Relation':
-                    sentence_raw = sentence_raw + '\x03' + lit_text + '\x03'
+                    if(ent_start != ent_stop):
+                        sentence_raw = sentence_raw + '\x03' + lit_text + '\x03'
+                    else:
+                        sentence_raw = sentence_raw.rstrip() + '\x03' + lit_text + '\x03'
+                    ent_stop = entity['offset_stop']
                 if ent_type == 'PathRelevant':
-                    sentence_raw = sentence_raw + (' ' if entity == sent['entities'][0] else '') + '<' + lit_text + '>'
+                    if(ent_start != ent_stop):
+                        sentence_raw = sentence_raw + (' ' if entity == sent['entities'][0] else '') + '<' + lit_text + '>'
+                    else:
+                        sentence_raw = sentence_raw.rstrip() + (' ' if entity == sent['entities'][0] else '') + '<' + lit_text + '>'
+                    ent_stop = entity['offset_stop']
 
                 if entity != sent['entities'][len(sent['entities'])-1]: # not for the last one
                     sentence_raw = sentence_raw + ' '
@@ -117,7 +125,7 @@ for text_file in f_rec:
                 ent_type = entity['type']
                 lit_start = entity['offset_start']
                 lit_stop = entity['offset_stop']
-                lit_text = text[lit_start:lit_stop]
+                lit_text = text[lit_start:lit_stop].replace("\n","") # literal representation of sentence, with newlines removed
                 sentence_raw = sentence_raw + ent_type + '= \"' + lit_text + '\"  '
 
             sentence_raw = sentence_raw + '>'
@@ -127,16 +135,29 @@ for text_file in f_rec:
         # sentence attributes
         #
         if (len(sent['sent_attributes'])):
-            # <attr type="time" literal="合格後" token="合格後">
             for sent_attribute in sent['sent_attributes']:
                 attr_name = sent_attribute['type'].lower()
+                attr_marker = sent_attribute['marker'] # corresponds to lexreps.csv match 
+                attr_entity = sent['entities'][sent_attribute['entity_ref']]['index'] # corresponding entity index value
+
+                attr_marker_literal = text[sent_attribute['offset_start']:sent_attribute['offset_stop']].replace("\n","") # literal version of the marker, remove newlines
+                attr_entity_literal = text[sent['entities'][sent_attribute['entity_ref']]['offset_start']:sent['entities'][sent_attribute['entity_ref']]['offset_stop']].replace("\n","") # corresponding entity index literal value, remove newlines
+
                 if (attr_name == 'datetime'):
                     attr_name = 'time'
-                sent_attribute_raw = '<attr type=\"' + attr_name + '\" literal=\"' + text[sent['entities'][sent_attribute['entity_ref']]['offset_start']:sent['entities'][sent_attribute['entity_ref']]['offset_stop']] + ('\" marker=\"' if OldStyle==False else '\" token=\"') + sent_attribute['marker'] + '\"'
-                if sent_attribute['value']:
-                   sent_attribute_raw = sent_attribute_raw + ' value=\"' + sent_attribute['value'] + '\"'
-                if sent_attribute['unit']:
-                   sent_attribute_raw = sent_attribute_raw + ' unit=\"' + sent_attribute['unit'] + '\"'
+                sent_attribute_raw = '<attr type=\"' + attr_name + '\" literal=\"' + attr_entity_literal + ('\" marker=\"' if OldStyle==False else '\" token=\"') + sent_attribute['marker'].lstrip() + '\"'
+                if attr_name == 'certainty':
+                    if sent_attribute['value']:
+                        sent_attribute_raw = sent_attribute_raw + ' level=\"' + sent_attribute['value'] + '\"'
+                else:
+                    if sent_attribute['value']:
+                        sent_attribute_raw = sent_attribute_raw + ' value=\"' + sent_attribute['value'] + '\"'
+                    if sent_attribute['unit']:
+                        sent_attribute_raw = sent_attribute_raw + ' unit=\"' + sent_attribute['unit'] + '\"'
+                    if sent_attribute['value2']:
+                        sent_attribute_raw = sent_attribute_raw + ' value2=\"' + sent_attribute['value2'] + '\"'
+                    if sent_attribute['unit2']:
+                        sent_attribute_raw = sent_attribute_raw + ' unit2=\"' + sent_attribute['unit2'] + '\"'
 
                 sent_attribute_raw = sent_attribute_raw + '>'
                 # print(sent_attribute_raw)
@@ -194,6 +215,8 @@ for text_file in f_rec:
                     attr_name = "measurement"
                 if (attr_name == "Negation"):
                     attr_name = "negation"
+                if (attr_name == "Certainty"):
+                    attr_name = "certainty"
 
                 start_position = path_attribute['pos']
                 attribute_span = path_attribute['span']

@@ -10,6 +10,8 @@
 #define IKNOW_API
 #endif
 
+#include "UserKnowledgeBase.h" // User KB (for udct)
+
 //
 // stl library includes
 //
@@ -162,14 +164,63 @@ namespace iknowdata { // to bundle all generated data
 
 }
 
+//
+// User Dictionary for customizing iKnow output
+//
+class IKNOW_API UserDictionary
+{
+public:
+	UserDictionary(); // ctor
+
+	// Clear the User Dictionary object
+	void clear();
+
+	// Tag User Dictionary label to a lexical representation for customizing purposes
+	// Currently available labels are : "UDNegation", "UDPosSentiment", "UDNegSentiment", "UDConcept", "UDRelation", "UDNonRelevant", "UDUnit", "UDNumber" and "UDTime"
+	// labels can be combined, separated by ';', like "UDConcept;UDTime", "UDRelation;UDNumber"
+	// Returns iKnowEngine::iknow_unknown_label if an invalid label is passed as parameter.
+	int addLabel(const std::string& literal, const char* UdctLabel);
+
+	// Add User Dictionary literal rewrite, *not* functional, added for compatibility with the IRIS implementation.
+	// The purpose is to rewrite like "dr." to "doctor", to aggregate similar lexical representations.
+	void addEntry(const std::string& literal, const std::string& literal_rewrite);
+
+	// Add User Dictionary EndNoEnd, enables force/suppress sentence end conditions.
+	// See iKnowUnitTests::test5() for an example.
+	void addSEndCondition(const std::string& literal, bool b_end = true);
+
+	// Shortcut for known UD labels
+	void addConceptTerm(const std::string& literal); // tag literal as a concept
+	void addRelationTerm(const std::string& literal); // tag literal as a relation
+	void addNonrelevantTerm(const std::string& literal); // tag literal as a non-relevant
+
+	void addUnitTerm(const std::string& literal); // tag literal as a unit
+	void addNumberTerm(const std::string& literal); // tag literal as a number
+	void addTimeTerm(const std::string& literal); // tag literal as a time indicator
+	void addNegationTerm(const std::string& literal); // tag literal as a negation
+	void addPositiveSentimentTerm(const std::string& literal); // tag literal as a positive sentiment
+	void addNegativeSentimentTerm(const std::string& literal); // tag literal as a negative sentiment
+
+private:
+	friend class iKnowEngine;
+	iknow::csvdata::UserKnowledgeBase m_user_data; // User dictionary
+};
+
 class IKNOW_API iKnowEngine
 {
 public:
+	enum errcodes {
+		iknow_language_not_supported = -1, // unsupported language
+		iknow_unknown_label = -2	// udct addLabel : label does not exist
+	};
+
+	// returns set of supported languages
 	static const std::set<std::string>& GetLanguagesSet(void);
 
-	enum errcodes {
-		iknow_language_not_supported = -1 // unsupported language
-	};
+	// Normalizer is exposed to engine clients, needed for User Dictonary, and iFind functionality
+	static std::string NormalizeText(const std::string& text_source, const std::string& language, bool bUserDct = false, bool bLowerCase = true, bool bStripPunct = true);
+
+	// ctor & dtor
 	iKnowEngine();
 	~iKnowEngine();
 	
@@ -185,18 +236,16 @@ public:
 	// offsets, not byte offsets in text_source.
 	void index(const std::string& text_source, const std::string& language, bool b_trace=false);
 
-	// Adds User Dictionary annotations for customizing purposes
-	void addUdctAnnotation(size_t start, size_t stop, const char* UdctLabel) {
-		m_map_udct_annotations.insert(std::make_pair(start, iknow::core::IkIndexInput::IknowAnnotation(start, stop, UdctLabel)));
-	}
+
+	// User dictionary methods :
+	//     loadUserDictionary : will load *and* activate the user dictionary object, if a previously one is active, it will be unloaded and deactivated, will throw an exception if the udct object cannot be loaded.
+	//     unloadUserDictionary : will unload and deactivate the active user dictionary.
+	void loadUserDictionary(UserDictionary& udct);
+	void unloadUserDictionary(void);
 
 	iknowdata::Text_Source m_index; // this is where all iKnow indexed information is stored after calling the "index" method.
 	std::vector<std::string> m_traces; // optional collection of linguistic trace info, generated if b_trace equals true
 
 private:
-	iknow::core::IkIndexInput::mapInputAnnotations_t m_map_udct_annotations;
 
 };
-
-
-

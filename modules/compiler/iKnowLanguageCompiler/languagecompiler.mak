@@ -18,7 +18,7 @@ PROJECT = iknowlanguagecompiler
 
 OBJECTFLAGS = -D_DOUBLEBYTE -DCACHE_COM_DISABLE
 
-LIBRARIES = iknowbase iknowcore
+LIBRARIES = iknowbase iknowcore icui18n icuuc
 
 LIBRARYDIRS = $(ROOT_DIR)/kit/$(PLATFORM)/$(MODE)/bin
 
