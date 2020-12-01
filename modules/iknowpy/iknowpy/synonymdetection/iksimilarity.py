@@ -35,6 +35,10 @@ class IKSimilarityTools(object):
         Returns
         -----------
         A list of the top words
+
+        Throws
+        -----------
+        KeyError - if term is not found in the vocabulary
         """
         if term.replace(" ", "_") in self.wordvectors.vocab:
             gensimpairs = self.wordvectors.most_similar(term.replace(" ", "_"), topn=num_similar)
@@ -60,15 +64,19 @@ class IKSimilarityTools(object):
 
         Returns
         -----------
-        Float [0,1] where 0 = not similar and 1 = identical, -1 if can't be calculated
+        Float [0,1] where 0 = not similar and 1 = identical
+
+        Throws
+        -----------
+        KeyError: if term1 and/or term2 not in the model's vocabulary
         """
         try:
             term1 = term1.replace(" ", "_")
             term2 = term2.replace(" ", "_")
             sim = self.wordvectors.similarity(term1, term2)
             return sim
-        except KeyError:
-            return -1
+        except KeyError as err:
+            raise KeyError("{} is not in the vocabulary, cosine similarity could not be computed".format(err.args[0])) from err
     
 
     def evaluate_word_pairs(self, word_pairs, delimiter, case_insensitive):
@@ -91,6 +99,8 @@ class IKSimilarityTools(object):
         and the model assigned scores
         
         OOV ratio (float) - The ratio of words that were out of vocabulary
+
+        NOTE: This is to give some quantitative sense of the efficacy of the model. 
         """
         score = self.wordvectors.evaluate_word_pairs(pairs=word_pairs, delimiter=delimiter, case_insensitive=case_insensitive)
         return (score[1][0], score[2])
@@ -102,9 +112,9 @@ class IKSimilarityTools(object):
 
         Parameters
         --------------
-        use_iknow_entities (bool) - whether to find synonyms for iKnow entities in the string (as opposed to words)
-
         source_text (str) - A free string text source
+        
+        use_iknow_entities (bool) - whether to find synonyms for iKnow entities in the string (as opposed to words)
 
         num_similar (int) - Number of similar words that will be returned for each term in the source text (if exist).
         Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
@@ -112,9 +122,9 @@ class IKSimilarityTools(object):
 
         Returns
         --------------
-        a dictionary of synonyms for each entity or word in the source
+        A dictionary of synonyms for each entity or word in the source
 
-        Note: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
+        NOTE: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
         their individual components. So it is one or the other
         """
         dictionary = {}
@@ -154,9 +164,9 @@ class IKSimilarityTools(object):
 
         Parameters
         --------------
-        use_iknow_entities (bool) - whether to find synonyms for iKnow entities (as opposed to words)
-
         source_text (str) - The path to a file containing the source text
+        
+        use_iknow_entities (bool) - whether to find synonyms for iKnow entities (as opposed to words)
 
         num_similar (int) - Number of similar words that will be returned for each term in the source text (if exist).
         Higher num_similar ~ less strict similarity, lower num_similar ~ more strict similarity
@@ -166,7 +176,7 @@ class IKSimilarityTools(object):
         --------------
         a dictionary of synonyms for each entity or word in the source
 
-        Note: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
+        NOTE: Right now, using iKnow entities will only check for synoyms of the iKnow entities, not for 
         their individual components. So it is one or the other.
         """
         dictionary = {}
@@ -205,13 +215,35 @@ class IKSimilarityTools(object):
 class IKFastTextTools(IKSimilarityTools):
     """ Subclass of IKSimilarityTools
 
-        Contains methods to access exisiting models and evaluate similarity.
+        Contains methods to access exisiting FastText models and evaluate similarity between terms.
+
+        Methods:
+        load_vectors(self, pmodel_name): Load into memory the vectors of a previously trained model.
+
+        Inherited methods:
+        most_similar(self, term, num_similar=5): Return num_similar most similar terms to term in the model
+
+        get_similarity(self, term1, term2): Compute cosine similarity of term1 and term2
+
+        evaluate_word_pairs(self, word_pairs, delimiter, case_insensitive): Compute Spearman coeff. and 
+        out-of-vocab ratio for a model
+
+        synonym_dict_from_string(self, source_text, use_iknow_entities=True, num_similar=5):
+        Get a dictionary of synonyms, where each key is a term in the source_text string and each
+        entry is the top num_similar most similar words to that key in the model. 
+
+        synonym_dict_from_file(self, source_text, use_iknow_entities=True, num_similar=5)
+        Get a dictionary of synonyms, where each key is a term in the source_text FILE and each
+        entry is the top num_similar most similar words to that key in the model. 
     """
 
-    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'fasttext')
+    __PATH_PREFIX__ = os.path.join('synonymdetection','models', 'fasttext')
 
     def __init__(self, pmodel_name, installdir=''): 
 
+        # installdir will be for calls from within IRIS and is {INSTALLDIR}/mgr/python. IRIS
+        # Python runtime doesn't handle relative paths well currently. 
+        # Otherwise, __PATH_PREFIX__ alone is sufficient.
         if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
 
         try:
@@ -232,6 +264,10 @@ class IKFastTextTools(IKSimilarityTools):
         Parameters
         -----------
         pmodel_name (str) - Name of the model to load vectors from
+
+        Throws
+        -----------
+        FileNotFoundError - If specified model is not found.
         """
         try:
             if pmodel_name[-4:] != '.bin':
@@ -244,12 +280,36 @@ class IKFastTextTools(IKSimilarityTools):
 
 
 class IKWord2VecTools(IKSimilarityTools):
-    """ Class description
+    """ Subclass of IKSimilarityTools
+
+        Contains methods to access existing Word2Vec models and evaluate similarity between terms.
+
+        Methods:
+        load_vectors(self, pmodel_name): Load into memory the vectors of a previously trained model.
+
+        Inherited methods:
+        most_similar(self, term, num_similar=5): Return num_similar most similar terms to term in the model
+
+        get_similarity(self, term1, term2): Compute cosine similarity of term1 and term2
+
+        evaluate_word_pairs(self, word_pairs, delimiter, case_insensitive): Compute Spearman coeff. and 
+        out-of-vocab ratio for a model
+
+        synonym_dict_from_string(self, source_text, use_iknow_entities=True, num_similar=5):
+        Get a dictionary of synonyms, where each key is a term in the source_text string and each
+        entry is the top num_similar most similar words to that key in the model. 
+
+        synonym_dict_from_file(self, source_text, use_iknow_entities=True, num_similar=5)
+        Get a dictionary of synonyms, where each key is a term in the source_text FILE and each
+        entry is the top num_similar most similar words to that key in the model. 
     """
-    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'vectors')
+    __PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'vectors')
 
     def __init__(self, pmodel_name='IKDefaultModel', installdir=''):
         
+        # installdir will be for calls from within IRIS and is {INSTALLDIR}/mgr/python. IRIS
+        # Python runtime doesn't handle relative paths well currently. 
+        # Otherwise, __PATH_PREFIX__ alone is sufficient.
         if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
 
         try:
@@ -270,6 +330,10 @@ class IKWord2VecTools(IKSimilarityTools):
         Parameters
         -----------
         pmodel_name (str) - Name of the model to load vectors from
+
+        Throws
+        -----------
+        FileNotFoundError - if specified model (pmodel_name) is not found
         """
 
         try:
@@ -286,11 +350,11 @@ class IKWord2VecTools(IKSimilarityTools):
 class IKSimilarityModeling():
 
     @classmethod
-    def create_new_model(cls, corpus_path, model, epochs=5, iknow_preprocess=True, tokenize_concepts=True):
+    def create_new_model(cls, corpus_path, model, epochs=5, use_iknow_entities=True, tokenize_concepts=True):
         print('Building vocabulary...\n')
         # build vocabulary
         try:
-            corpus_path = SentenceIterator(corpus_path=corpus_path, iknow_preprocess=iknow_preprocess, tokenize_concepts=tokenize_concepts)
+            corpus_path = SentenceIterator(corpus_path=corpus_path, use_iknow_entities=use_iknow_entities, tokenize_concepts=tokenize_concepts)
             model.build_vocab(sentences=corpus_path)
         except FileNotFoundError as err:
             raise FileNotFoundError('No corpus found at %s' % corpus_path) from err
@@ -310,7 +374,7 @@ class IKSimilarityModeling():
     def update_model(cls, corpus_path, model, use_iknow_entities, tokenize_concepts):
         # Must update the vocabulary of unique words in the corpus prior to training
         # Note that you MUST pass in update=True to not destroy existing form of the model
-        sentences = SentenceIterator(corpus_path, iknow_preprocess=use_iknow_entities, tokenize_concepts=tokenize_concepts)
+        sentences = SentenceIterator(corpus_path, use_iknow_entities=use_iknow_entities, tokenize_concepts=tokenize_concepts)
 
         model.build_vocab(sentences=sentences, update=True)
         
@@ -319,66 +383,26 @@ class IKSimilarityModeling():
             epochs=model.epochs
         )
 
-
-    @staticmethod
-    def iknow_index_corpus_preprocessor(tokenize_concepts, corpus_path=None, output_corpus_name='iknow_preprocessed_corpus.txt'):
-        """ Indexes the training corpus using iKnow Engine. Replaces
-        multiword entities with singular tokens (e.g. acute pulmonary hypertension 
-        -> acute_pulmonary_hypertension). Builds a dictionary of synonyms
-        based on synonym marking relations (e.g. "also called"). Removes
-        NonRelevants from the corpus.
-        
-        Parameters
-        -----------
-        corpus_path (str) - Path to the corpus to be indexed
-
-        output_corpus_name (str) - File in which processed output should be written 
-
-        Output
-        -----------
-        New file in corpora directory with the name output_corpus_name
-        """
-        engine = iknowpy.iKnowEngine()
-        corpus_output_file = open('corpora/' + output_corpus_name, 'a+')
-        # Handles a corpus spread across multiple files in a directory
-        if os.path.isdir(os.fsencode(corpus_path)):
-            directory = os.fsencode(corpus_path)
-            for file in os.listdir(directory):
-                print('Working on a new file.')
-                filename = corpus_path + '/' + os.fsdecode(file)
-                try:
-                    # This would hopefully be easier/quicker with direct access to iKnow domain?
-                    for line in open(filename):
-                        engine.index(line, 'en')
-                        for s in engine.m_index['sentences']:
-                            for p in s['path']:
-                                if s['entities'][p]['type'] == 'Concept' and tokenize_concepts:
-                                    corpus_output_file.write(s['entities'][p]['index'].replace(" ", "_") + ' ')
-                                else:
-                                    corpus_output_file.write(s['entities'][p]['index'] + ' ')
-                        corpus_output_file.write('\n')
-                except UnicodeDecodeError:
-                    continue
-        # Handles a singular corpus file
-        else:
-            try:
-                for line in open(corpus_path):
-                    engine.index(line, 'en')
-                    for s in engine.m_index['sentences']:
-                        for p in s['path']:
-                            if s['entities'][p]['type'] == 'Concept':
-                                corpus_output_file.write(s['entities'][p]['index'].replace(" ", "_") + ' ')
-                            else:
-                                corpus_output_file.write(s['entities'][p]['index'] + ' ')
-                corpus_output_file.write('\n')
-            except UnicodeDecodeError:
-                pass
-        corpus_output_file.close()
-
-
         
 class IKFastTextModeling(IKSimilarityModeling):
-    """ Class Description
+    """ Subclass of IKSimilarityModeling
+
+        Contains methods to train (create new) and retrain (update existing) models.
+
+        Methods (class methods):
+        create_new_model(cls, corpus_path, pmodel_name, epochs=5, pmin_count=10, psize=150, installdir=''):
+        Creates a new model pmodel_name, trained on corpus found at corpus_path. Makes epochs number of passes
+        over the corpus. Words in the corpus must appear pmin_count times to be considered. Vectors will be of 
+        dimension psize. installdir is passed from IRIS Python Runtime to aid Python in locating relevant directories
+        of the module on an IRIS instance.
+
+        update_model(cls, corpus_path, pmodel_name, use_iknow_entities=True, tokenize_concepts=True, installdir=''):
+        Updates the model pmodel_name, training on corpus found at corpus_path. If use_iknow_entities, will use 
+        iKnow entities in training. If tokenize_concepts, will turn iKnow entities into singular tokens, joined by underscores
+        (_). installdir is passed from IRIS Python Runtime to aid Python in locating relevant directories
+        of the module on an IRIS instance.
+
+        NOTE: Update is currently non-functional.
     """
 
     __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'fasttext')
@@ -409,7 +433,7 @@ class IKFastTextModeling(IKSimilarityModeling):
         -----------
         True if model created/trained, False if could not be created
 
-        Raises
+        Throws
         -----------
         FileNotFoundError - If corpus_path not found
         RuntimeError - If training an already existing model that makes it past first if statement. This
@@ -433,7 +457,7 @@ class IKFastTextModeling(IKSimilarityModeling):
 
 
     @classmethod
-    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True, installdir=''):
+    def update_model(cls, corpus_path, pmodel_name, use_iknow_entities=True, tokenize_concepts=True, installdir=''):
         """ Updates an already existing model by continuing its training
         on a new corpus.
 
@@ -448,7 +472,7 @@ class IKFastTextModeling(IKSimilarityModeling):
         -----------
         True if model was updated, else False
 
-        Raises
+        Throws
         -----------
         FileNotFoundError - if corpus or model not found
         """
@@ -461,7 +485,7 @@ class IKFastTextModeling(IKSimilarityModeling):
             path = os.path.join(model_path, pmodel_name)
             model = ft.load_facebook_model(path)
 
-            super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
+            super().update_model(corpus_path, model, use_iknow_entities, tokenize_concepts)
 
             # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
             os.remove(path)
@@ -474,12 +498,31 @@ class IKFastTextModeling(IKSimilarityModeling):
 
 
 class IKWord2VecModeling(IKSimilarityModeling):
-    __MODEL_PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'trained_models')
-    __VECTOR_PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'word2vec', 'vectors')
+    """ Subclass of IKSimilarityModeling
+
+        Contains methods to train (create new) and retrain (update existing) models.
+
+        Methods (class methods):
+        create_new_model(cls, corpus_path, pmodel_name, updateable=True, epochs=5, pmin_count=5, psize=300, installdir=''):
+        Creates a new model pmodel_name, trained on corpus found at corpus_path. If updateable, will save the entire model
+        to be reloaded for continued training (updating) at a later time, otherwise only save vectors. Makes epochs number of passes
+        over the corpus. Words in the corpus must appear pmin_count times to be considered. Vectors will be of 
+        dimension psize. installdir is passed from IRIS Python Runtime to aid Python in locating relevant directories
+        of the module on an IRIS instance.
+
+        update_model(cls, corpus_path, pmodel_name, use_iknow_entities=True, tokenize_concepts=True, installdir=''):
+        Updates the model pmodel_name, training on corpus found at corpus_path. If use_iknow_entities, will use 
+        iKnow entities in training. If tokenize_concepts, will turn iKnow entities into singular tokens, joined by underscores
+        (_). installdir is passed from IRIS Python Runtime to aid Python in locating relevant directories
+        of the module on an IRIS instance.
+    """
+    
+    __MODEL_PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'trained_models')
+    __VECTOR_PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'vectors')
 
     
     @classmethod
-    def create_new_model(cls, corpus_path, pmodel_name, updateable=True, epochs=5, pmin_count=5, psize=300, installdir=''):
+    def create_new_model(cls, corpus_path, pmodel_name, updateable=True, epochs=5, pmin_count=5, psize=150, installdir=''):
         """ Creates and trains (and optionally saves) a model using gensim's implementation 
         of the fastText algorithm, and then loads the KeyedVectors associated with that model.
         
@@ -497,7 +540,7 @@ class IKWord2VecModeling(IKSimilarityModeling):
         -----------
         True if model created/trained, False if could not be created
 
-        Raises
+        Throws
         -----------
         FileNotFoundError - If corpus_path not found
         RuntimeError - If training an already existing model that makes it past first if statement. This
@@ -526,7 +569,7 @@ class IKWord2VecModeling(IKSimilarityModeling):
 
 
     @classmethod
-    def update_model(cls, corpus_path, pmodel_name, iknow_preprocess=True, tokenize_concepts=True, installdir=''):
+    def update_model(cls, corpus_path, pmodel_name, use_iknow_entities=True, tokenize_concepts=True, installdir=''):
         """ Updates an already existing model by continuing its training
         on a new corpus.
 
@@ -541,7 +584,7 @@ class IKWord2VecModeling(IKSimilarityModeling):
         -----------
         True if model was updated, else False
 
-        Raises
+        Throws
         -----------
         FileNotFoundError - if corpus or model not found
         """
@@ -554,7 +597,7 @@ class IKWord2VecModeling(IKSimilarityModeling):
                 pmodel_name = pmodel_name + '.bin'
             model = Word2Vec.load(os.path.join(model_path, pmodel_name[:-4]))
             
-            super().update_model(corpus_path, model, iknow_preprocess, tokenize_concepts)
+            super().update_model(corpus_path, model, use_iknow_entities, tokenize_concepts)
 
             # Clear current contents of folders storing model and KeyedVectors files as gensim doesn't do it
             os.remove(os.path.join(model_path, pmodel_name[:-4]))
@@ -578,17 +621,17 @@ class SentenceIterator(object):
         -----------
         corpus_path (str) - A path to a file or a directory containing multiple corpus files
 
-        iknow_preprocess (bool) - If True, preprocess lines of the corpus using iKnow enginge so that
+        use_iknow_entities (bool) - If True, preprocess lines of the corpus using iKnow enginge so that
         only path relevant entities will be included for training
 
         tokenize_concepts (bool) - If True, when preprocessing lines from the corpus with iKnow engine, 
         replace concepts with singular tokens (e.g. heart attack -> heart_attack)
     """
-    def __init__(self, corpus_path, iknow_preprocess, tokenize_concepts):
+    def __init__(self, corpus_path, use_iknow_entities, tokenize_concepts):
         self.corpus_path = corpus_path
         self.is_dir = os.path.isdir(corpus_path)
-        if iknow_preprocess:
-            self.iknow_preprocess = iknow_preprocess
+        if use_iknow_entities:
+            self.use_iknow_entities = use_iknow_entities
             self.tokenize_concepts = tokenize_concepts
             self.engine = iknowpy.iKnowEngine()
  
@@ -596,7 +639,7 @@ class SentenceIterator(object):
         if self.is_dir:
             for fname in os.listdir(self.corpus_path):
                 for line in open(os.path.join(self.corpus_path, fname)):
-                    if self.iknow_preprocess:
+                    if self.use_iknow_entities:
                         self.engine.index(line, 'en')
                         for s in self.engine.m_index['sentences']:
                             sent = []
@@ -610,7 +653,7 @@ class SentenceIterator(object):
                         yield line.split()
         else:
             for line in open(self.corpus_path):
-                if self.iknow_preprocess:
+                if self.use_iknow_entities:
                     self.engine.index(line, 'en')
                     sent = []
                     for s in self.engine.m_index['sentences']:
