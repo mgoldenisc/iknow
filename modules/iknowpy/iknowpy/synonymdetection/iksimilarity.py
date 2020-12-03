@@ -237,7 +237,7 @@ class IKFastTextTools(IKSimilarityTools):
         entry is the top num_similar most similar words to that key in the model. 
     """
 
-    __PATH_PREFIX__ = os.path.join('synonymdetection','models', 'fasttext')
+    __PATH_PREFIX__ = os.path.join('models', 'fasttext')
 
     def __init__(self, pmodel_name, installdir=''): 
 
@@ -303,7 +303,7 @@ class IKWord2VecTools(IKSimilarityTools):
         Get a dictionary of synonyms, where each key is a term in the source_text FILE and each
         entry is the top num_similar most similar words to that key in the model. 
     """
-    __PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'vectors')
+    __PATH_PREFIX__ = os.path.join('models', 'word2vec', 'vectors')
 
     def __init__(self, pmodel_name='IKDefaultModel', installdir=''):
         
@@ -405,7 +405,7 @@ class IKFastTextModeling(IKSimilarityModeling):
         NOTE: Update is currently non-functional.
     """
 
-    __PATH_PREFIX__ = os.path.join('mgr','python','synonymdetection','models', 'fasttext')
+    __PATH_PREFIX__ = os.path.join('models', 'fasttext')
 
 
     @classmethod
@@ -517,8 +517,8 @@ class IKWord2VecModeling(IKSimilarityModeling):
         of the module on an IRIS instance.
     """
     
-    __MODEL_PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'trained_models')
-    __VECTOR_PATH_PREFIX__ = os.path.join('synonymdetection','models', 'word2vec', 'vectors')
+    __MODEL_PATH_PREFIX__ = os.path.join('models', 'word2vec', 'trained_models')
+    __VECTOR_PATH_PREFIX__ = os.path.join('models', 'word2vec', 'vectors')
 
     
     @classmethod
