@@ -241,17 +241,12 @@ class IKFastTextTools(IKSimilarityTools):
 
     def __init__(self, pmodel_name, installdir=''): 
 
-        # installdir will be for calls from within IRIS and is {INSTALLDIR}/mgr/python. IRIS
+        # installdir will be for calls from within IRIS and is {IRISINSTALLDIR}/mgr/python/synonymdetection. IRIS
         # Python runtime doesn't handle relative paths well currently. 
         # Otherwise, __PATH_PREFIX__ alone is sufficient.
         if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
 
-        try:
-            if pmodel_name[-4:] != '.bin':
-                pmodel_name = pmodel_name + '.bin'
-            self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name))
-        except FileNotFoundError as err:
-            raise FileNotFoundError('No model found with name %s' % pmodel_name) from err
+        self.load_vectors(pmodel_name)
 
         self.model_name = pmodel_name
 
@@ -260,6 +255,9 @@ class IKFastTextTools(IKSimilarityTools):
         """ Loads the VECTORS of an already trained model. It is much quicker and 
         less cumbersome to use just vectors than to use the model itself, but
         still comes with the various important syntactic/semantic tools.
+
+        If the vectors of the specified model are not found but another model's vectors
+        are already loaded, this instance will continue to use the already loaded vectors.
 
         Parameters
         -----------
@@ -274,8 +272,7 @@ class IKFastTextTools(IKSimilarityTools):
                 pmodel_name = pmodel_name + '.bin'
             self.wordvectors = ft.load_facebook_vectors(os.path.join(self.__PATH_PREFIX__, pmodel_name))
         except FileNotFoundError as err:
-            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name[:-4], 
-        old=self.model_name[:-4])) from err
+            raise FileNotFoundError("Model with name {} not found.".format(pmodel_name[:-4])) from err
 
 
 
@@ -307,17 +304,12 @@ class IKWord2VecTools(IKSimilarityTools):
 
     def __init__(self, pmodel_name='IKDefaultModel', installdir=''):
         
-        # installdir will be for calls from within IRIS and is {INSTALLDIR}/mgr/python. IRIS
+        # installdir will be for calls from within IRIS and is {IRISINSTALLDIR}/mgr/python/synonymdetection. IRIS
         # Python runtime doesn't handle relative paths well currently. 
         # Otherwise, __PATH_PREFIX__ alone is sufficient.
         if installdir != '': self.__PATH_PREFIX__ = installdir + self.__PATH_PREFIX__
 
-        try:
-            if pmodel_name[-4:] != '.bin':
-                pmodel_name = pmodel_name + '.bin'
-            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
-        except FileNotFoundError as err:
-            raise FileNotFoundError('No model found with name {}'.format(pmodel_name[:-4])) from err
+        self.load_vectors(pmodel_name)
 
         self.model_name = pmodel_name # Keeps track of what model is at use
 
@@ -327,6 +319,9 @@ class IKWord2VecTools(IKSimilarityTools):
         less cumbersome to use just vectors than to use the model itself, but
         still comes with the various important syntactic/semantic tools.
 
+        If the vectors of the specified model are not found but another model's vectors
+        are already loaded, this instance will continue to use the already loaded vectors.
+        
         Parameters
         -----------
         pmodel_name (str) - Name of the model to load vectors from
@@ -341,8 +336,7 @@ class IKWord2VecTools(IKSimilarityTools):
                 pmodel_name = pmodel_name + '.bin'
             self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
         except FileNotFoundError as err:
-            raise FileNotFoundError("Model with name {new} not found. Continuing use of vectors for currently loaded model ({old})".format(new=pmodel_name[:-4], 
-        old=self.model_name[:-4])) from err
+            raise FileNotFoundError("Model with name {} not found.".format(pmodel_name[:-4])) from err
 
 
 
