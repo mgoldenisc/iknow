@@ -70,7 +70,7 @@ __pycache__
 
 # Synonym detection
 /modules/iknowpy/iknowpy/synonymdetection/datasets/testoutput*
-
+*.yml
 
 wheelhouse/
 *.bak
