@@ -113,6 +113,9 @@ iknow::base::String CSV_DataGenerator::GetSpecialLabel(SpecialLabel label) {
 	case KatakanaLabel:
 		return IkStringEncoding::UTF8ToBase("Katakana");
 		break;
+	case CertaintyLabel:
+		return IkStringEncoding::UTF8ToBase("SCertainty");
+		break;
 	default:
 		throw ExceptionFrom<CSV_DataGenerator>("Unknown special label requested.");
 	}
@@ -134,6 +137,10 @@ iknow::base::String CSV_DataGenerator::GetSpecialLabel(SpecialLabel label) {
 #define IKATTDURATION 		10
 #define IKATTMEASURE	 	11
 #define IKATTCERTAINTY		12
+#define IKATTGENERIC_1		13
+#define IKATTGENERIC_2		14
+#define IKATTGENERIC_3		15
+
 
 /*
 Method GetProperty(key As %Integer) As %List
@@ -152,22 +159,15 @@ const std::vector<std::pair<int, string>> CSV_DataGenerator::kb_properties = {
 	make_pair(IKATTFREQ, "Frequency"),
 	make_pair(IKATTDURATION, "Duration"),
 	make_pair(IKATTMEASURE, "Measurement"),
-	make_pair(IKATTCERTAINTY, "Certainty")
+	make_pair(IKATTCERTAINTY, "Certainty"),
+	make_pair(IKATTGENERIC_1, "Generic1"),
+	make_pair(IKATTGENERIC_2, "Generic2"),
+	make_pair(IKATTGENERIC_3, "Generic3"),
+
 };
 
 void CSV_DataGenerator::loadCSVdata(std::string language, bool IsCompiled, std::ostream& os)
 {
-	/*
-	Do ..LoadTableFromCSV(prefix _ "metadata.csv", "%iKnow.KB.Metadata", kb)
-	Do ..LoadTableFromCSV(prefix _ "acro.csv", "%iKnow.KB.Acronym", kb)
-	Do ..LoadTableFromCSV(prefix _ "regex.csv", "%iKnow.KB.Regex", kb)
-	Do ..LoadTableFromCSV(prefix _ "filter.csv", "%iKnow.KB.Filter", kb)
-	Do ..LoadTableFromCSV(prefix _ "labels.csv", "%iKnow.KB.Label", kb)
-	// Quit:'##class(%File).Exists(fileName) ##class(%Exception.StatusException).%New("LoadTableFromCSV","9999",,$Listbuild("File " _ fileName _ " does *not* exist."))
-	Do:complete ..LoadTableFromCSV(prefix _ "lexreps.csv", "%iKnow.KB.Lexrep", kb)
-	Do ..LoadTableFromCSV(prefix _ "prepro.csv", "%iKnow.KB.PreprocessFilter", kb)
-	Do ..LoadTableFromCSV(prefix _ "rules.csv", "%iKnow.KB.Rule", kb)
-	*/
 	kb_language = language;
 	Hash = language; // just a unique string per KB
 	stringstream message;
@@ -224,7 +224,17 @@ void CSV_DataGenerator::loadCSVdata(std::string language, bool IsCompiled, std::
 	if (!os.fail()) {
 		os << left << "Rule CSV mapping:" << endl;
 		for (int idRule = 0; idRule < kb_rules.size(); idRule++) {
-			os << setw(12) << string(to_string(idRule) + ":" + kb_rules[idRule].csv_id) << "\t" << kb_rules[idRule].InputPattern << "\t->\t" << kb_rules[idRule].OutputPattern << "\t(" << kb_rules[idRule].Phase << ")" << endl;
+			string input_pattern, output_pattern;
+			for (vector<string>::iterator it = kb_rules[idRule].InputPattern.begin(); it != kb_rules[idRule].InputPattern.end(); ++it) { // reconstruct output
+				if (it != kb_rules[idRule].InputPattern.begin()) input_pattern += "|";
+				input_pattern += *it;
+			}
+			for (vector<string>::iterator it = kb_rules[idRule].OutputPattern.begin(); it != kb_rules[idRule].OutputPattern.end(); ++it) { // reconstruct output
+				if (it != kb_rules[idRule].OutputPattern.begin()) output_pattern += "|";
+				output_pattern += *it;
+			}
+
+			os << setw(12) << string(to_string(idRule) + ":" + kb_rules[idRule].csv_id) << "\t" << input_pattern << "\t->\t" << output_pattern << "\t(" << kb_rules[idRule].Phase << ")" << endl;
 		}
 	}
 	labelIndexTable_type &label_index_table = labelIndexTable;
@@ -248,6 +258,19 @@ String CSV_DataGenerator::GetRegexPattern(String regexName) // Method GetRegexPa
 		}
 	}
 	return String();
+}
+
+void CSV_DataGenerator::writeIRISlexreps(string lexreps_file)
+{
+	std::ofstream os(lexreps_file); // lexreps.csv file for IRIS
+	if (os.is_open()) {
+		os << "\xEF\xBB\xBF"; // Force utf8 header, maybe utf8 is not the system codepage, for std::cout, use "chcp 65001" to switch
+
+		for (auto it_lexrep = kb_lexreps.begin(); it_lexrep != kb_lexreps.end(); ++it_lexrep) {
+			os << ";" << it_lexrep->Meta << ";" << it_lexrep->Token << ";;" << it_lexrep->Labels << endl;
+		}
+		os.close();
+	}
 }
 
 static const size_t kRawSize = 48000000;
@@ -308,6 +331,7 @@ using namespace iknow::base;
 using namespace iknow::core;
 
 typedef map<String, FastLabelSet::Index> LabelIndexMap;
+typedef map<FastLabelSet::Index, vector<Phase>> LabelIndex2PhasesMap; // maps label indexes to phase collection, used to verify if label phases match with rule phase
 
 class CacheList;
 
@@ -329,10 +353,13 @@ private:
 
 class WithLabelMap {
 protected:
-	WithLabelMap(LabelIndexMap& map) : map_(map) {}
+	WithLabelMap(LabelIndexMap& map) : map_(map), p_map_phases_(NULL) {}
+	WithLabelMap(LabelIndexMap& map, LabelIndex2PhasesMap* p_map_phases) : map_(map), p_map_phases_(p_map_phases) {}
 	LabelIndexMap& GetLabelMap() { return map_; }
+	LabelIndex2PhasesMap& GetLabelPhasesMap() { return (*p_map_phases_); }
 private:
 	LabelIndexMap& map_;
+	LabelIndex2PhasesMap* p_map_phases_;
 	void operator=(const WithLabelMap&);
 };
 
@@ -398,7 +425,7 @@ template<>
 class RawListToKb<KbRule> : private WithAllocator, private WithLabelMap {
 public:
 	typedef KbRule output_type;
-	RawListToKb(RawAllocator& allocator, LabelIndexMap& map) : WithAllocator(allocator), WithLabelMap(map) {}
+	RawListToKb(RawAllocator& allocator, LabelIndexMap& map, LabelIndex2PhasesMap* p_label_phases) : WithAllocator(allocator), WithLabelMap(map, p_label_phases) {}
 
 #if defined _IRIS
 	KbRule operator()(CacheList& list) {
@@ -406,7 +433,7 @@ public:
 	}
 #else
 	KbRule operator()(iKnow_KB_Rule rule) {
-		return KbRule(GetAllocator(), GetLabelMap(), rule.InputPattern, rule.OutputPattern, iknow::core::PhaseFromString(rule.Phase));
+		return KbRule(GetAllocator(), GetLabelMap(), GetLabelPhasesMap(), rule.InputPattern, rule.OutputPattern, iknow::core::PhaseFromString(rule.Phase));
 	}
 #endif
 
@@ -555,17 +582,23 @@ template<typename IterT, typename TransformerT, typename StringT, typename KeyFu
 void LoadKbRangeAsTable(IterT begin, IterT end, size_t size, TransformerT& transformer, const Table<StringT, typename TransformerT::output_type>*& table, KeyFuncT key_function, RawAllocator& allocator) {
 	typedef typename TransformerT::output_type KbT;
 	typedef vector<KbT> Values;
-	Values values;
-	values.reserve(size);
-	transform(begin, end, back_inserter(values), transformer);
-	Builder<StringT, KbT> table_builder(values.size());
-	for (typename Values::const_iterator i = values.begin(); i != values.end(); ++i) {
-		table_builder.Insert(key_function(&*i), allocator.Insert(*i));
+
+	if (size == size_t(0)) { // empty table
+		table = allocator.Insert(Table<StringT, typename TransformerT::output_type>());
 	}
-	table = allocator.Insert(table_builder.Build(allocator));
+	else {
+		Values values;
+		values.reserve(size);
+		transform(begin, end, back_inserter(values), transformer);
+		Builder<StringT, KbT> table_builder(values.size());
+		for (typename Values::const_iterator i = values.begin(); i != values.end(); ++i) {
+			table_builder.Insert(key_function(&*i), allocator.Insert(*i));
+		}
+		table = allocator.Insert(table_builder.Build(allocator));
+	}
 }
 
-unsigned char* iknow::shell::base_pointer = NULL;
+const unsigned char* iknow::shell::base_pointer = NULL;
 
 void CSV_DataGenerator::generateRAW(bool IsCompiled)
 {
@@ -579,6 +612,7 @@ void CSV_DataGenerator::generateRAW(bool IsCompiled)
 	BasePointerFrame frame_guard(reinterpret_cast<unsigned char*>(kb_data_)); // OFFSETPTRGUARD
 
 	LabelIndexMap label_index_map; // label names mapped to (internal) label indexes.
+	LabelIndex2PhasesMap label_index_phases_map; // label indexes to label phases.
 	AttributeMapBuilder attribute_map_builder;
 
 	size_t labels_count = static_cast<size_t>(LabelCount());
@@ -603,6 +637,12 @@ void CSV_DataGenerator::generateRAW(bool IsCompiled)
 		labels_table_builder.Insert(label->PointerToName(), allocator.Insert(i));
 		//TODO: Other components should just use the kb_data_->labels table.
 		label_index_map.insert(LabelIndexMap::value_type(label->Name(), static_cast<FastLabelSet::Index>(i)));
+
+		// collect label phases
+		for (auto it = label->GetPhasesBegin(); it != label->GetPhasesEnd(); ++it) {
+			const Phase a_phase = *it;
+			label_index_phases_map[static_cast<FastLabelSet::Index>(i)].push_back(a_phase);
+		}
 	}
 	kb_data_->labels = allocator.Insert(labels_table_builder.Build(allocator));
 
@@ -625,7 +665,7 @@ void CSV_DataGenerator::generateRAW(bool IsCompiled)
 	}
 	//Rules
 	{
-		RawListToKb<KbRule> rule_transformer(allocator, label_index_map);
+		RawListToKb<KbRule> rule_transformer(allocator, label_index_map, &label_index_phases_map);
 		const KbRule *begin, *end;
 		LoadKbRange(kb_rules.begin(), kb_rules.end(), kb_rules.size(), rule_transformer, allocator, begin, end);
 		kb_data_->rules_begin = begin;
@@ -746,8 +786,8 @@ vector<int> CSV_DataGenerator::CreateLabelsIndexVector(iKnow_KB_Lexrep& lexrep, 
 		if (labelName == "") continue;
 		labelIndexTable_type::iterator it = table.find(labelName);
 		if (it == table.end()) { // If '$Data(table(labelName)) {
-			cout << endl << "Missing label (" << labelName << ") from lexrep """ << lexrep.Token << """(" << lexrep.Labels << ") in label table."; // Write !, "Missing label (" _ labelName _ ") from lexrep """ _ lexrep.Token _ """(" _ labelList _ ") in label table."
-			break; // Break
+			cout << endl << "Missing label (" << labelName << ") from lexrep \"" << lexrep.Token << "\" (" << lexrep.Labels << ")."; // Write !, "Missing label (" _ labelName _ ") from lexrep """ _ lexrep.Token _ """(" _ labelList _ ") in label table."
+			throw ExceptionFrom<CSV_DataGenerator>("\n*** Missing label in lexreps. ***");
 		}
 		indexList.push_back(it->second);
 	}
@@ -767,7 +807,7 @@ void CSV_DataGenerator::CompileLexrepDictionaryPhase(/*kb As %iKnow.KB.Knowledge
 	bool hasRegex = (phase == "_regex"); // Set hasRegex = (phase = "_regex")
 
 	iknow::AHO::GotoFunction *gotoFunc = new iknow::AHO::GotoFunction; // Set gotoFunc = ##class(GotoFunction).%New()
-	gotoFunc->RegexEnabled = phase_switch; // regex_predicate->MatchRegex;
+	gotoFunc->RegexEnabled = true; // always expand... phase_switch; // regex_predicate->MatchRegex;
 	gotoFunc->RegexDictionary = new iknow::AHO::KnowledgebaseRegexDictionary; // Set gotoFunc.RegexDictionary = ##class(KnowledgebaseRegexDictionary).%New()
 	gotoFunc->RegexDictionary->Knowledgebase = this; // Set gotoFunc.RegexDictionary.Knowledgebase = kb
 
@@ -787,8 +827,6 @@ void CSV_DataGenerator::CompileLexrepDictionaryPhase(/*kb As %iKnow.KB.Knowledge
 		iknow::base::String token = IkStringEncoding::UTF8ToBase(lexrep.Token); // Set token = $ZCONVERT(lexrep.Token, "I", "UTF8")
 
 		outputAdapter->Labels = labels; // Set outputAdaptor.Labels = labels
-		// Set labelString = lexrep.Labels
-		// If $E(labelString, *) = ";" Set $E(labelString, $L(labelString)) = ""  // remove ending ';' for conformity		
 		outputAdapter->LabelString = lexrep.Labels; // // Set outputAdaptor.LabelString = labelString
 		outputAdapter->MetaString = lexrep.Meta;
 
@@ -807,7 +845,7 @@ void CSV_DataGenerator::CompileLexrepDictionaryPhase(/*kb As %iKnow.KB.Knowledge
 	metadataTable->AddValue(hasRegex); // do metadataTable.AddValue(hasRegex)
 
 	cout << "Building failure and second output table..." << endl;
-	iknow::AHO::FailureFunction *failureFunc = iknow::AHO::FailureFunction::Create(gotoFunc, outputFunc); // Set failureFunc = ##class(FailureFunction).Create(gotoFunc, outputFunc)
+	iknow::AHO::FailureFunction *failureFunc = iknow::AHO::FailureFunction::Create(gotoFunc, outputFunc, isIdeographic); // Set failureFunc = ##class(FailureFunction).Create(gotoFunc, outputFunc)
 	// Set sc = ##class(%File).CreateDirectoryChain(outputDir)
 	// If 'sc Throw ##class(%Exception.StatusException).CreateFromStatus(sc)
 
@@ -859,4 +897,20 @@ void CSV_DataGenerator::handle_UTF8_BOM(std::ifstream& ifs)
 		ifs.putback(utf8BOM[1]);
 		ifs.putback(utf8BOM[0]);
 	}
+}
+
+//
+// Data insert methods
+//
+void CSV_DataGenerator::AddLexrep(string& token, string& meta, string& labels, vector<string>& token_segments)
+{
+	iKnow_KB_Lexrep lexrep(token, meta, labels);
+
+	int idx_lexrep = (int)kb_lexreps.size(); // index in lexrep vector for fast retral
+	lexrep_index[lexrep.Token] = idx_lexrep;
+	if (token_segments.size()) { // collect the token segments
+		int idx_segment = 0; // segment index 
+		for_each(token_segments.begin(), token_segments.end(), [idx_lexrep, &idx_segment](string& token_segment) { lexrep_segments_index[token_segment].push_back(idx_lexrep); lexrep_segments_index[token_segment].push_back(idx_segment++); });
+	}
+	kb_lexreps.push_back(lexrep); // Set lexrep.Knowledgebase = kb
 }

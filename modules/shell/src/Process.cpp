@@ -31,7 +31,7 @@ using namespace iknow::base;
 using namespace iknow::core;
 using namespace iknow::shell;
 
-CProcess::CProcess(const std::map<String, IkKnowledgebase*>& languageKbMap) : m_IsJapaneseInvolved(false), m_tracing_enabled(0), m_merge_relations(1), m_allow_long_sentences(1), m_delimited_sentences_mode(0), m_make_summary(0), m_max_concept_cluster_length(0), m_user_dictionary(NULL), m_stemmer(NULL)
+CProcess::CProcess(const std::map<String, IkKnowledgebase*>& languageKbMap) : m_IsJapaneseInvolved(false), m_tracing_enabled(0), m_merge_relations(1), m_allow_long_sentences(0), m_delimited_sentences_mode(0), m_make_summary(0), m_max_concept_cluster_length(0), m_user_dictionary(NULL), m_stemmer(NULL)
 {
   if (languageKbMap.empty())
     throw MessageExceptionFrom<CProcess>("IKNoKBLoaded");
@@ -104,7 +104,7 @@ void CProcess::IndexFunc(IkIndexInput& text_input, OutputFunc func, void *userda
 #ifdef ISC_IRIS
 			iKnowKernel::SetError("IKInternalEngineFault", ba.what()); // Notify memory problems to kernel
 #else
-			std::cerr << "IKInternalEngineFault" << ba.what();
+			std::cerr << "IKInternalEngineFault: \"" << ba.what() << "\"";
 #endif
 			// Todo : give indication of text size 
 		}

@@ -3,6 +3,7 @@
 
 import typing
 from cython.operator cimport dereference as deref, postincrement as postinc
+from libcpp.algorithm cimport lower_bound
 from .engine cimport *
 from collections import namedtuple
 from .labels import Labels
@@ -18,7 +19,7 @@ cdef char* eType_to_str(eType t) except NULL:
 		return 'Relation'
 	elif t == PathRelevant:
 		return 'PathRelevant'
-	raise ValueError('Entity type {} is unrecognized.'.format(t))
+	raise ValueError(f'Entity type {t} is unrecognized.')
 
 
 cdef char* aType_to_str(Attribute t) except NULL:
@@ -31,6 +32,8 @@ cdef char* aType_to_str(Attribute t) except NULL:
 		return 'PositiveSentiment'
 	elif t == NegativeSentiment:
 		return 'NegativeSentiment'
+	elif t == EntityVector:
+		return 'EntityVector'
 	elif t == Frequency:
 		return 'Frequency'
 	elif t == Duration:
@@ -39,7 +42,14 @@ cdef char* aType_to_str(Attribute t) except NULL:
 		return 'Measurement'
 	elif t == Certainty:
 		return 'Certainty'
-	raise ValueError('Attribute type {} is unrecognized.'.format(t))
+	elif t == Generic1:
+		return 'Generic1'
+	elif t == Generic2:
+		return 'Generic2'
+	elif t == Generic3:
+		return 'Generic3'
+
+	raise ValueError(f'Attribute type {t} is unrecognized.')
 
 
 Entry = namedtuple('Entry', ['literal', 'label'])
@@ -90,7 +100,14 @@ cdef class UserDictionary(object):
 		elif self.user_dictionary.addLabel(literal, UdctLabel) == 0:
 			self._entries.append(Entry(literal, UdctLabel))
 		else:
-			raise ValueError('User Dictionary Label {!r} is unknown.'.format(UdctLabel))
+			raise ValueError(f'User Dictionary Label {UdctLabel!r} is unknown.')
+
+	def add_certainty_level(self, str literal: typing.Text, int level) -> None:
+		"""Specify a token certainty level"""
+		if self.user_dictionary.addCertaintyLevel(literal, level) == 0:
+			self._entries.append(Entry(literal, "UDCertainty"))
+		else:
+			raise ValueError(f"Certainty value {level!r} out of range")
 
 	def add_sent_end_condition(self, str literal: typing.Text, cpp_bool bSentenceEnd: bool = True) -> None:
 		"""Add a sentence end condition."""
@@ -157,10 +174,17 @@ cdef class iKnowEngine:
 	results are stored in the m_index attribute. If applicable, linguistic trace
 	information is stored in the m_traces attribute."""
 	cdef CPPiKnowEngine engine
+	cdef vector[size_t] index_shift  # shift indices to calculate surrogate pairs
 
 	def __cinit__(self):
 		"""Initialize the underlying C++ iKnowEngine class"""
 		self.engine = CPPiKnowEngine()
+
+	cdef size_t idx_shift(self, size_t index):
+		"""Return a corrected index to account for the fact that the C++ engine
+		uses UCS2 surrogate pairs (2x16bit chars), while Python indexes all
+		chars equally."""
+		return index - (lower_bound(self.index_shift.begin(), self.index_shift.end(), index) - self.index_shift.begin())
 
 	@staticmethod
 	def get_languages_set() -> typing.Set[typing.Text]:
@@ -179,7 +203,19 @@ cdef class iKnowEngine:
 		False by default. If traces is True, then the linguistic trace
 		information is stored in the m_traces attribute."""
 		if language not in self.get_languages_set():
-			raise ValueError('Language {!r} is not supported.'.format(language))
+			raise ValueError(f'Language {language!r} is not supported.')
+
+		# determine the Python indices of characters that the C++ engine will
+		# convert into surrogate pairs
+		self.index_shift.clear()
+		cdef size_t idx = 0
+		for x in text_source:
+			if ord(x) > 2**16:
+				self.index_shift.push_back(idx)
+				idx += 2
+			else:
+				idx += 1
+
 		return self.engine.index(text_source, language, traces)
 
 	def load_user_dictionary(self, UserDictionary udct) -> None:
@@ -231,8 +267,8 @@ cdef class iKnowEngine:
 			entity_iter = sentence.entities.begin()
 			while entity_iter != sentence.entities.end():
 				entities_mod.append({'type': eType_to_str(deref(entity_iter).type),
-				                     'offset_start': deref(entity_iter).offset_start,
-				                     'offset_stop': deref(entity_iter).offset_stop,
+				                     'offset_start': self.idx_shift(deref(entity_iter).offset_start),
+				                     'offset_stop': self.idx_shift(deref(entity_iter).offset_stop),
 				                     'index': deref(entity_iter).index,
 				                     'dominance_value': deref(entity_iter).dominance_value,
 				                     'entity_id': deref(entity_iter).entity_id})
@@ -240,14 +276,15 @@ cdef class iKnowEngine:
 			sent_attr_iter = sentence.sent_attributes.begin()
 			while sent_attr_iter != sentence.sent_attributes.end():
 				sent_attrs_mod.append({'type': aType_to_str(deref(sent_attr_iter).type),
-				                       'offset_start': deref(sent_attr_iter).offset_start,
-				                       'offset_stop': deref(sent_attr_iter).offset_stop,
+				                       'offset_start': self.idx_shift(deref(sent_attr_iter).offset_start),
+				                       'offset_stop': self.idx_shift(deref(sent_attr_iter).offset_stop),
 				                       'marker': deref(sent_attr_iter).marker,
 				                       'value': deref(sent_attr_iter).value,
 				                       'unit': deref(sent_attr_iter).unit,
 				                       'value2': deref(sent_attr_iter).value2,
 				                       'unit2': deref(sent_attr_iter).unit2,
-				                       'entity_ref': deref(sent_attr_iter).entity_ref})
+				                       'entity_ref': deref(sent_attr_iter).entity_ref,
+									   'entity_vector': deref(sent_attr_iter).entity_vector})
 				postinc(sent_attr_iter)
 			path_attr_iter = sentence.path_attributes.begin()
 			while path_attr_iter != sentence.path_attributes.end():

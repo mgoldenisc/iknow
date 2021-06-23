@@ -89,14 +89,14 @@ void IkIndexProcess::Start(IkIndexInput* pInput, IkIndexOutput* pOut, IkIndexDeb
   double certainty = 0;
   String kb_name(m_languageKbMap.empty()?String():m_languageKbMap.begin()->first);
 
-  int cntWordLimit = (bBinaryMode ? 0x7FFFFFFF : MAX_SENTENCE_SIZE); // set word count limit
+  size_t cntWordLimit = (bBinaryMode ? 0x7FFFFFFF : MAX_SENTENCE_SIZE); // set word count limit
   Lexreps lexrep_vector;
   while ( m_pKnowledgebase->GetMetadata<kIsJapanese>()
-		  ?	FindNextSentenceJP(pInput, lexrep_vector, nPosition)
+		  ?	FindNextSentenceJP(pInput, lexrep_vector, nPosition, cntWordLimit*(size_t)5)
 		  : FindNextSentence(pInput, lexrep_vector, nPosition, cntWordLimit, delimitedSentences, kb_name, certainty, pUdct)) // split by sentences and store in a list
     {
 	  SEMANTIC_ACTION(SentenceFound(kb_name, certainty, m_pKnowledgebase->GetMetadata<kLanguageCode>(), lexrep_vector, pOut->IsJP() ? String() : SpaceString()));
-      if (!bBinaryMode && lexrep_vector.size() >= MAX_SENTENCE_SIZE) continue; // limit sentence length
+      // if (!bBinaryMode && lexrep_vector.size() >= MAX_SENTENCE_SIZE) continue; // limit sentence length
 	  if (lexrep_vector.size()==2) continue; // no text, only SBegin & SEnd
 
 	  Lexreps identified_lexrep_vector;
@@ -136,7 +136,11 @@ void IkIndexProcess::Start(IkIndexInput* pInput, IkIndexOutput* pOut, IkIndexDeb
 		} else { // path relevant style
 			BuildPathsFromPathRelevants(merged_lexrep_vector, path_vector);
 		}
-      }      
+	  }
+	  else { // Introducing path's for Japanese
+		  Paths& path_vector = sentence.GetPaths();
+		  BuildPathsFromPathRelevants(merged_lexrep_vector, path_vector);
+	  }
       SEMANTIC_ACTION(SentenceComplete(sentence, *m_pKnowledgebase));
       if (m_pKnowledgebase->GetMetadata<kHasEntityVectors>()) { 
 		IkSentence::EntityVector& eVectors = sentence.GetEntityVector();
@@ -164,7 +168,6 @@ iknow::base::String IkIndexProcess::NormalizeText(const iknow::base::String& inp
 	  output = buffer;
   }
   else { // Alphanumerical version
-	  //TODO: duplicative with CProcess code.
 	  if (ud) {
 		  ud->FilterInput(buffer);
 	  }
@@ -173,23 +176,25 @@ iknow::base::String IkIndexProcess::NormalizeText(const iknow::base::String& inp
 	  IkStringAlg::Normalize(buffer, bLowerCase, bStripPunct);
 	  //TODO: duplicative with FindNextSentence
 
-	  bool prev_was_space = false;
 	  String current_word; current_word.reserve(16);
 	  for (String::iterator i = buffer.begin(); i != buffer.end(); ++i) {
 		  if (!u_isprint(*i)) continue; // skip non printables.
 		  bool cur_is_space = u_isblank(*i) > 0;
 		  if (cur_is_space && !current_word.empty()) {
 			  FilterAll(current_word, kb);
+			  if (!output.empty()) // space separator necessary, FilterAll will trim all spaces
+				  output += SpaceString();
 			  output += current_word;
 			  current_word.clear();
 		  }
-		  if (!cur_is_space || !prev_was_space) {
-			  current_word += *i;
+		  else {
+			  if (!cur_is_space) current_word += *i;
 		  }
-		  prev_was_space = cur_is_space;
 	  }
 	  if (!current_word.empty()) {
 		  FilterAll(current_word, kb);
+		  if (!output.empty()) // space separator necessary, FilterAll will trim all spaces
+			  output += SpaceString();
 		  output += current_word;
 	  }
 	  else {
@@ -239,7 +244,11 @@ struct TokenProcessor {
     kb_(kb)
   {}
   void operator()(const Char* begin, const Char* end, bool bLastPiece) {    
-	if (begin == end && !bLastPiece) return; // empty tokens in list don't count
+	  if (begin == end && !bLastPiece) {
+		  if (literals_used_ == 0) // starts with a space, synchronize with literal.
+			  ++literals_used_;
+		  return; // empty tokens in list don't count
+	  }
 
     if (bLastPiece && literals_used_ < max_literal_-1) { // not all literals have been used, merge them on the current literal position
 	  text_refs_[literals_used_].second = text_refs_[max_literal_-1].second; // cover the merged text
@@ -249,6 +258,13 @@ struct TokenProcessor {
     if (literals_used_ < max_literal_) {
 	  literal_begin = text_refs_[literals_used_].first;
 	  literal_end = text_refs_[literals_used_].second;
+	  /*
+	  const Char* corrector = begin;
+	  while (*literal_end == *corrector && corrector<=end) { // correction for weak splitting
+		  literal_end++;
+		  corrector++;
+	  }
+	  */
     }
 	if (begin == end && literals_used_) { // empty token, merge literal with previous lexrep
 		result_.back().SetTextPointerEnd(literal_end); // enlarge latest literal
@@ -399,7 +415,7 @@ void IkIndexProcess::Preprocess(const Char* val_begin, const Char* val_end, Lexr
   IkStringAlg::TokenizeWithLPFlag(strIndex.data(), strIndex.data() + strIndex.size(), static_cast<Char>(' '), token_processor); // extra flag indication if last piece
 }
 
-bool IkIndexProcess::FindNextSentenceJP(IkIndexInput* pInput, Lexreps& lexrep_vector, int& nPosition)
+bool IkIndexProcess::FindNextSentenceJP(IkIndexInput* pInput, Lexreps& lexrep_vector, int& nPosition, size_t cntWordLimit)
 {
     const size_t input_size = pInput->GetString()->size();
     if ((size_t)nPosition >= input_size) return false; // all done
@@ -407,7 +423,7 @@ bool IkIndexProcess::FindNextSentenceJP(IkIndexInput* pInput, Lexreps& lexrep_ve
     const Char *pData=(pInput->GetString())->c_str(); // pointer to text data
     int nBeginPos = nPosition; // marks literal start position
 	lexrep_vector.clear();
-	lexrep_vector.reserve(32); //Japanese needs double...
+	lexrep_vector.reserve(64); //Japanese needs double...
 
 	LexrepContext::SeenLabels().Clear();
 	lexrep_vector.push_back(m_begin_lr); // insert SBegin to mark beginning of sentence
@@ -415,6 +431,11 @@ bool IkIndexProcess::FindNextSentenceJP(IkIndexInput* pInput, Lexreps& lexrep_ve
 
 	// int const nPositionBeginFixed = nPosition; // store start position
 	while ((size_t)nPosition < input_size) {
+		if (lexrep_vector.size() >= cntWordLimit) { // force sentence separator if limit has been reached
+			nPosition--;
+			break;
+		}
+
 	  Char cCur=pData[nPosition];
       if (lexrep_vector.size()==1 && (IkStringAlg::IsJpnIDSP(cCur) || cCur==' ')) { // prodlog111211: If first char is double space, ignore it, if single space, also ignore it
         nPosition++, nBeginPos++;
@@ -639,7 +660,7 @@ bool IkIndexProcess::FindNextSentenceJP(IkIndexInput* pInput, Lexreps& lexrep_ve
 bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vector, int& nPosition, size_t cntWordLimit, bool delimitedSentences, String& language, double& certainty, IkKnowledgebase *pUdct, double certaintyThresholdForChangingLanguage, int nPositionEndOfPreviousIteration)
 {
 	lexrep_vector.clear();
-	lexrep_vector.reserve(16); //TODO: TRW, better guess?
+	lexrep_vector.reserve(32);
 
 	//Clear the "SeenLabels" which we use during processing of a single sentence
 	//TODO: A more general "context" object that takes callbacks to implement this kind of policy.
@@ -659,6 +680,10 @@ bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vect
 	bool bIsAlfaNum = false; // tracks if NBS contains alphanumerical symbols
 
 	while ((size_t)nPosition < input_size && !bEndFound) {
+		if (lexrep_vector.size() >= cntWordLimit) { // force sentence separator if limit has been reached
+			nPosition--;
+			break;
+		}
 		if (pInput->IsAnnotated((size_t) nPosition)) { // separate processing
 			if (nPosition>nBeginPos) { // add previous token, if valid
 				const Char* val_begin = pData + nBeginPos;
@@ -688,7 +713,7 @@ bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vect
 			bNBSseparator = true;
 		  break;
 		  case token::kLine:
-			if (lexrep_vector.empty() && nBeginPos == nPosition) { // start of new sentence, ignore
+			if (lexrep_vector.size()==1 && nBeginPos == nPosition) { // start of new sentence, ignore
 				nPosition++, nBeginPos++;
 				continue;
 			}
@@ -712,7 +737,7 @@ bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vect
 		if (bNBSseparator) { //NBS 
 			if (bSentenceSeparator) { // end of sentence condition
 				prev_type = token::kText; // reset
-				if (lexrep_vector.empty()) { // no text yet
+				if (lexrep_vector.size()==1) { // no text yet
 				  nPosition++, nBeginPos++;
 				  continue;
 				} else
@@ -720,7 +745,7 @@ bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vect
 			}
 			const Char* val_begin = pData + nBeginPos;
 			const Char* val_end = pData + nPosition;
-			if (this_type == token::kLine) { // strip-off line terminator symbols
+			if (this_type == token::kLine && val_end > val_begin) { // strip-off line terminator symbols
 				while (token::GetType<Char>(*(val_end-1)) == token::kLine && val_end > val_begin) --val_end;
 			}
 
@@ -757,8 +782,6 @@ bool IkIndexProcess::FindNextSentence(IkIndexInput* pInput, Lexreps& lexrep_vect
 					SEMANTIC_ACTION(LexrepCreated(lexrep_vector.back(), *m_pKnowledgebase));
 				}
 				bIsAlfaNum = false; // reset for next token
-				if (lexrep_vector.size() >= cntWordLimit) // force sentence separator if limit has been reached
-					break;
 			}
 			else
 				nBeginPos = nPosition + 1;
@@ -1041,6 +1064,35 @@ struct MatchesPattern : public binary_function<const IkLexrep, const IkRuleInput
 	  if (const short lexrep_length_option = pattern.GetLexrepLengthOption()) {
 		  if (lexrep.GetNormalizedValue().length() != static_cast<size_t>(lexrep_length_option)) return false;
 	  }
+	  uint8_t c_pattern;
+	  IkRuleInputPattern::MetaOperator c_operator;
+	  if (pattern.GetCertaintyLevelCheck(c_pattern, c_operator)) { // meta data check on certainty level
+		  uint8_t c_lexrep = static_cast<uint8_t>(lexrep.GetCertainty());
+		  switch (c_operator) {
+		  case IkRuleInputPattern::MetaOperator::eq: // equal operator
+			  if (!(c_lexrep == c_pattern))
+				  return false;
+			  break;
+		  case IkRuleInputPattern::MetaOperator::gt: // greater than
+			  if (!(c_lexrep > c_pattern))
+				  return false;
+			  break;
+		  case IkRuleInputPattern::MetaOperator::gteq: // greater than or equal
+			  if (!(c_lexrep >= c_pattern))
+				  return false;
+			  break;
+		  case IkRuleInputPattern::MetaOperator::lt: // lower than
+			  if (!(c_lexrep < c_pattern))
+				  return false;
+		  case IkRuleInputPattern::MetaOperator::lteq: // lower than or equal
+			  if (!(c_lexrep <= c_pattern))
+				  return false;
+			  break;
+		  default: // unknown/illegal operator
+			  throw ExceptionFrom<IkIndexProcess>("Unknown operator for certainty level check.");
+		  }
+	  }
+
 	if (!pattern.HasLabelTypes()) {
 		return pattern.IsMatch(pattern.MatchesGlobalLabelsSet() ? lexrep.GetLabels() : lexrep.GetLabels(phase_));
 	} else // send type information only if necessary
@@ -1147,7 +1199,7 @@ void IkIndexProcess::SolveAmbiguous(Lexreps& lexreps)
 
     Lexreps::iterator search_begin = lexreps.begin();
     Lexreps::iterator search_end = lexreps.end();
-    if (lexreps.size() < pattern_size) continue;
+    
 	bool join_required = false, join_reverse_required = false;
 	bool is_variable_rule = (find_if(orig_begin, orig_end, [](const IkRuleInputPattern& rip) { return rip.IsVariable(); }) != orig_end); // true;
 	if (is_variable_rule) {
@@ -1231,6 +1283,7 @@ void IkIndexProcess::SolveAmbiguous(Lexreps& lexreps)
 		}
 	}
 	else {
+		if (lexreps.size() < pattern_size) continue; // works only for non variable rules
 		Lexreps::iterator match = search(search_begin, search_end, orig_begin, orig_end, MatchesPattern(phase));
 		while (match != search_end) {
 			SEMANTIC_ACTION(ApplyRule(i, match, pattern_size, *m_pKnowledgebase));

@@ -41,6 +41,26 @@ void iKnowUnitTests::runUnitTests(void)
 		test_collection.Issue39(pError);
 		pError = "Issue42 : https://github.com/intersystems/iknow/issues/42";
 		test_collection.Issue42(pError);
+		pError = "Saskia1";
+		test_collection.Saskia1(pError);
+		pError = "Saskia2";
+		test_collection.Saskia2(pError);
+		pError = "Saskia3";
+		test_collection.Saskia3(pError);
+		pError = "Saskia4";
+		test_collection.Saskia4(pError);
+		pError = "Issue64 : https://github.com/intersystems/iknow/issues/64";
+		test_collection.Issue64(pError);
+		pError = "Issue70 : https://github.com/intersystems/iknow/issues/70";
+		test_collection.Issue70(pError);
+		pError = "DP-402269 : https://usjira.iscinternal.com/browse/DP-402269";
+		test_collection.DP402269(pError);
+		pError = "Issue86 : https://github.com/intersystems/iknow/issues/86";
+		test_collection.Issue86(pError);
+		pError = "Issue104 : https://github.com/intersystems/iknow/issues/104";
+		test_collection.Issue104(pError);
+		pError = "Normalizer test";
+		test_collection.Benjamin1(pError);
 
 	}
 	catch (std::exception& e) {
@@ -51,6 +71,296 @@ void iKnowUnitTests::runUnitTests(void)
 	catch (...) {
 		cerr << "Unit Test \"" << pError << "\" failed !" << endl;
 		exit(-1);
+	}
+}
+
+void iKnowUnitTests::Benjamin1(const char* pMessage) {
+	string text_source_utf8 = u8"Risque d'exploitation";
+
+	string normalized = iKnowEngine::NormalizeText(text_source_utf8, "fr");
+	if (normalized != u8"risque d' exploitation")
+		throw runtime_error("Benjamin1 : Wrong normalization for French.");
+}
+
+/// <summary>
+/// After adding some PathRelevant entities and simple path expansion, I’ve compared the outputs between IRIS NLP and iknowpy. I’ve found one difference which seems to result from different ways that IRIS & iknowpy identiy lexreps.
+/*
+Sentence: また、大川小のある釜谷地区では住民と在勤者、来訪者計232人のうち、181人が犠牲となったとの調査結果を報告。
+
+Lexrep identification for the part "232人のうち、181人が" in IRIS :
+Lexrep("232") = Numeric
+Lexrep("人") = JPCon + JPCount + JPRule3437 + Lit_人
+Lexrep("のうち") = JPParticlePREPO
+Lexrep("、") = JPComma + Lit_、
+Lexrep("181") = Numeric
+Lexrep("人") = JPCon + JPCount + JPRule3437 + Lit_人
+Lexrep("が") = JPga + Lit_が
+
+Lexrep identification for the same part in iknowpy :
+LexrepIdentified:232 : Numeric;
+LexrepIdentified:人:JPCon; JPRule3437; JPCount; Lit_人;
+LexrepIdentified:のうち:JPParticlePREPO;
+LexrepIdentified:、:JPComma; Lit_、;
+LexrepIdentified:181人 : JPCon; JPNumber; Lit_1人;
+LexrepIdentified:が:JPga; Lit_が;
+
+As can be seen, “181人” is identified differently : IRIS identifies the whole chunk of numbers “181” first, whereas iknowpy identifies the lexrep “1人” first.This difference results in different indexing results for the character "が", now that it can sometimes be PathRelevant rather than NonRelevant.With the general left - to - right principle, the IRIS way should be kept.
+*/
+/// </summary>
+/// <param name="pMessage"></param>
+/*
++[125]	"LexrepIdentified:<lexrep id=29 type=Concept value=\"232\" index=\"232\" labels=\"Numeric;\" />;"	std::string
++[126]	"LexrepIdentified:<lexrep id=30 type=Unknown value=\"äºº\" index=\"äºº\" labels=\"JPCon;JPRule3437;JPCount;Lit_äºº;\" />;"	std::string
++[127]	"LexrepIdentified:<lexrep id=61 type=Unknown value=\"ã®ã†ã¡\" index=\"ã®ã†ã¡\" labels=\"JPParticlePREPO;\" />;"	std::string
++[128]	"LexrepIdentified:<lexrep id=34 type=Unknown value=\"ã€\" index=\"ã€\" labels=\"JPComma;Lit_ã€;\" />;"	std::string
++[129]	"LexrepIdentified:<lexrep id=35 type=Concept value=\"181\" index=\"181\" labels=\"Numeric;\" />;"	std::string
+*/
+void iKnowUnitTests::Issue104(const char* pMessage)
+{
+	iKnowEngine engine;
+	String text_source = IkStringEncoding::UTF8ToBase(u8"また、大川小のある釜谷地区では住民と在勤者、来訪者計232人のうち、181人が犠牲となったとの調査結果を報告。");
+
+	engine.index(text_source, "ja", true);
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		if (it->find("LexrepIdentified") != string::npos && it->find("value=\"181\"") != string::npos) return;
+	}
+	throw std::runtime_error("Issue104 : wrong lookup for Japanese numericals !" + string(pMessage));
+}
+
+void iKnowUnitTests::Issue86(const char* pMessage) { // UDCertainty test with certainty level
+	string text_source_utf8 = u8"he suggests that maybe we will be certain.";
+	String text_source(IkStringEncoding::UTF8ToBase(text_source_utf8));
+
+	iKnowEngine engine;
+	UserDictionary user_dictionary;
+
+	if (iKnowEngine::iknow_certainty_level_out_of_range == user_dictionary.addCertaintyLevel("suggests", 4)) // new: certaintly level
+		throw std::runtime_error(string("Certainty Level out of range"));
+	if (iKnowEngine::iknow_certainty_level_out_of_range == user_dictionary.addCertaintyLevel("maybe", 2)) // new: certaintly level
+		throw std::runtime_error(string("Certainty Level out of range"));
+	if (iKnowEngine::iknow_certainty_level_out_of_range == user_dictionary.addCertaintyLevel("certain", 9)) // new: certaintly level
+		throw std::runtime_error(string("Certainty Level out of range"));
+
+	engine.loadUserDictionary(user_dictionary);
+	engine.index(text_source, "en", true); // traces should show UDPosSentiment
+
+	if (engine.m_index.sentences.size() > 1) // "Fr." must not split the sentence
+		throw std::runtime_error(string(pMessage));
+
+	// Check for Positive Sentiment markers
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+		// cout << *it << endl;
+		// +[12]	"UserDictionaryMatch:<lexrep id=6 type=Unknown value=\"er/pr\" index=\"er/pr\" labels=\"UDPosSentiment;ENCon;\" />;"	std::string
+		// +[13]	"UserDictionaryMatch:<lexrep id=7 type=Unknown value=\"positive.\" index=\"positive\" labels=\"UDPosSentiment;ENCon;\" />;"	std::string
+		if (it->find("UserDictionaryMatch") != string::npos) {
+			string& trace_userdct = (*it);
+			if (trace_userdct.find("suggests") != string::npos) {
+				if (trace_userdct.find("UDCertainty") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+			if (trace_userdct.find("maybe") != string::npos) {
+				if (trace_userdct.find("UDCertainty") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+			if (trace_userdct.find("certain") != string::npos) {
+				if (trace_userdct.find("UDCertainty") == string::npos)
+					throw std::runtime_error(string(pMessage));
+			}
+		}
+	}
+	engine.unloadUserDictionary();
+}
+
+void iKnowUnitTests::DP402269(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"資源第一本部長（北米住友商事グループ北米資源・エネルギーグループ長）村井俊朗▽アジア大洋州総支配人補佐兼アジア大洋州住友商事グループアジア大洋州資源・化学品・メディア事業ユニット長兼アジア大洋州住友商事シンガポールユニット長（石油化学品）岡田卓也▽環境・インフラプロジェクト事業本部長（環境・インフラプロジェクト事業本部副本部長兼環境エネルギー事業第二）山埜英樹▽基礎化学品・エレクトロニクス本部副本部長、坂本好之▽ライフスタイル・リテイル事業本部副本部長兼リテイル＆ウェルネス事業部長（自動車リース事業部長）佐藤計▽電力インフラ事業本部副本部長兼電力事業第一、電池事業開発・野中紀彦▽軽金属・特殊鋼板本部副本部長、軽金属事業部長塩見圭吾▽中東支配人補佐兼イラン住友商事社長（地域総括部長）田中竹千代▽東アジア総代表補佐兼韓国住友商事社長（鋼板・建材本部長）若島浩▽米州総支配人補佐兼北米住友商事グループ北米化学品・エレクトロニクスグループ長兼米国住友商事に出向（ライフサイエンス本部長）須藤龍也▽同兼北米住友商事グループ北米資源・エネルギーグループ長兼米国住友商事に出向、林薫▽広報（ライフスタイル・リテイル事業本部長）新森健之▽電力インフラ事業本部長（電力インフラ事業本部副本部長兼タンジュン・ジャティＢプロジェクト）秋元勉▽ライフサイエンス本部長（中国住友商事グループ中国化学品・エレクトロニクス部門長兼上海住友商事蘇州事務所長）祐源通延▽欧阿中東ＣＩＳ総支配人補佐兼ＣＩＳ支配人兼ＣＩＳ住友商事社長（環境・インフラプロジェクト事業本部長）池村圭司▽地域総括部長（関西ブロック総括部長）出口雅敏▽建設不動産本部長兼総合建設開発（建設不動産本部副本部長兼不動産戦略事業部長）安藤伸樹▽船舶・航空宇宙・車輌事業本部副本部長兼船舶事業第二（欧州住友商事グループ欧州輸送機部門長）山口真▽ライフスタイル・リテイル事業本部長（ライフスタイル・リテイル事業本部副本部長兼ダイレクトマーケティング＆ソーシング事業部長）田中恵次▽アジア大洋州総支配人補佐兼インドネシア住友商事社長兼スラバヤ支店長（電力インフラ事業本部副本部長兼電力事業第一兼電力事業第二）佐橋明三▽東アジア総代表補佐兼中国住友商事グループ中国金属部門長兼上海住友商事社長、戸倉健夫▽基礎化学品・エレクトロニクス本部長（基礎化学品・エレクトロニクス本部副本部長兼資源性ケミカル第一）三輪聡▽自動車リース事業部長、自動車事業第一本部長中島正樹");
+	engine.index(text_source, "ja");
+	if (engine.m_index.sentences.size() == 0) {
+		throw std::runtime_error("Long messages should not be skipped in non binary mode !" + string(pMessage));
+	}
+}
+
+/* Issue#70
+Example 1: rule 2158 in the English language model
+2158; 50; typeRelation | .ENArtPosspron | *typeConcept+^ENList | ENComma | .ENArtPosspron | typeConcept + ^ ENNegation | ENAndOrBut+^"but" | .ENArtPosspron | typeConcept + ^ ENNegation | ENColon:SEnd; | +ENList | +ENList | +ENList | +ENList | +ENList | -ENNegStop + ENList | +ENList | +ENList | ;;
+
+This rule has 10 elements(9 + SEnd), 3 of which are optional.
+The rule fires for
+"of sneezing, a sore throat and fatigue." -> 9 elements(8 + SEnd)
+but not for:
+"of sneezing, a headache and fatigue." -> 8 elements(7 + SEnd)
+
+Example 2 : rule 2377 in the English language model
+2377; 65; ENCertainty | .ENNegation | ENPBegin+ENCertStop+^ENConj | .^ENPBegin+^SEnd | ENPBegin:SEnd; || -ENCertStop | *| +ENCertStop;;
+
+This rules has 5 elements, 2 of which are optional.
+The rule fires for
+"perhaps what else" -> 4 elements(3 + SEnd)
+but not for:
+"perhaps what" -> 3 elements(2 + SEnd)
+*/
+void iKnowUnitTests::Issue70(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"perhaps what else");
+	engine.index(text_source, "en", true);
+	bool bRuleFires = false;
+	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+
+		if (it->find("RuleApplication:rule_id=1261") != string::npos) {
+			bRuleFires = true;
+		}
+	}
+	if (bRuleFires) {
+		bRuleFires = false;
+		text_source = IkStringEncoding::UTF8ToBase(u8"perhaps what");
+		engine.index(text_source, "en", true);
+		for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
+
+			if (it->find("RuleApplication:rule_id=1261") != string::npos) {
+				bRuleFires = true;
+			}
+		}
+		if (!bRuleFires)
+			throw std::runtime_error("Rule 1261 does *not* fire !" + string(pMessage));
+	}
+}
+
+/* Issue#64 :
+The input below contains some Greek characters which seem to mess up the detection of word boundaries. Boundaries (spaces) appear at the wrong positions, causing splitting and incomplete words. This is especially clear at the end of the sentence: the first 3 characters of the second sentence become part of the first sentence. The shift continues until the end of the input file.
+The input file is UTF-8 encoded, as required.
+
+input:
+Syloïde blijkt een vergelijkbaar of zelfs groter effect te hebben op sommige parameters (bijv. 𝑎2, 𝑎3, 1 𝑡1 en 1 𝑡3) van de compressievergelijking. Dit vergelijkbare effect wordt echter vaak alleen bereikt bij een hogere concentratie Syloid in vergelijking met magnesiumstearaat.
+
+output:
+S1: Syloïde blijkt een vergelijkbaar of zelfs groter effect te hebben op sommige parameters (bijv. 𝑎2, 3, 1 𝑡1 en 1 3) van de om ressievergelijking. Dit
+S2: ver elijkbare effect wor t ech er vaa < all> en ber ikt bij een hog re concentratie Syloid in ergelijking met mag esiumstearaat.
+*/
+void iKnowUnitTests::Issue64(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	// String text_source = IkStringEncoding::UTF8ToBase(u8"Syloïde blijkt een vergelijkbaar of zelfs groter effect te hebben op sommige parameters (bijv. 𝑎2, 𝑎3, 1 𝑡1 en 1 𝑡3) van de compressievergelijking. Dit vergelijkbare effect wordt echter vaak alleen bereikt bij een hogere concentratie Syloid in vergelijking met magnesiumstearaat.");
+	String text_source = IkStringEncoding::UTF8ToBase(u8"𝑎2, 𝑎3, 1 𝑡1 en 1 𝑡3)");
+	engine.index(text_source, "nl");
+	for (auto it_sent = engine.m_index.sentences.begin(); it_sent != engine.m_index.sentences.end(); ++it_sent) {
+		const Sentence& sent = *it_sent; // get sentence reference
+
+		String SentenceText(&text_source[sent.offset_start()], &text_source[sent.offset_stop()]); // reconstruct the sentence
+		std::string SentenceTextUtf8 = IkStringEncoding::BaseToUTF8(SentenceText); // convert it back to utf8
+		if (SentenceTextUtf8 != u8"𝑎2, 𝑎3, 1 𝑡1 en 1 𝑡3)")
+			throw std::runtime_error("Failed to reconstruct surrogate pair symbols !" + string(pMessage));
+
+		/*
+		for (auto it_entity = sent.entities.begin(); it_entity != sent.entities.end(); ++it_entity) {
+			const Entity& entity = *it_entity;
+
+			std::cout << entity.index_ << std::endl;
+			String EntityText(&text_source[entity.offset_start_], &text_source[entity.offset_stop_]); // reconstruct the entity
+			std::string EntityTextUtf8 = IkStringEncoding::BaseToUTF8(EntityText); // convert it back to utf8
+			std::cout << EntityTextUtf8 << std::endl;
+		}
+		*/
+	}
+}
+
+/* Reported by Saskia
+In measurement attributes, if the first language to work with is not English, and later the engine switches to English, the value/unit extraction did not work anymore. This was due to a pointer comparison that did not work the way I expected.
+Now the language code is consulted to detect a language switch.
+*/
+void iKnowUnitTests::Saskia4(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source_cs = IkStringEncoding::UTF8ToBase(u8"Do retrospektivní studie bylo zařazeno 167 pacientů s ASJ.");
+	engine.index(text_source_cs, "cs");
+	String text_source_en = IkStringEncoding::UTF8ToBase(u8"Cambridge police said the search was for a 31-year-old former Harvard student and a wanted suspect in a Philadelphia murder who was believed to be in the Cambridge area.");
+	engine.index(text_source_en, "en");
+
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = engine.m_index.sentences.begin()->sent_attributes.begin(); it_marker != engine.m_index.sentences.begin()->sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Measurement) {
+			if (attribute.value_ != string("31") || attribute.unit_ != string("year-old"))
+				throw std::runtime_error("Measurement attribute not correct !" + string(pMessage));
+		}
+	}
+}
+
+/* Reported by Saskia
+"This is a conviction under an old, old New York law that's not used much for criminal purposes," said Stephen Neal, a lawyer for McNenney.
+IR: <attr type = "negation" literal = "that's not used" token = "not">
+PY : <attr type = "negation" literal = "that's not used" token = "'s not">
+*/
+void iKnowUnitTests::Saskia3(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"\"This is a conviction under an old, old New York law that's not used much for criminal purposes,\" said Stephen Neal, a lawyer for McNenney.");
+	engine.index(text_source, "en");
+	const Sentence& sent1 = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent1.sent_attributes.begin(); it_marker != sent1.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Negation) {
+			if (attribute.marker_ != string("not"))
+				throw std::runtime_error("Negation marker \"not\" not correct !" + string(pMessage));
+		}
+	}
+}
+
+
+/* Reported by Saskia
+One day, while selling corn, Phiona looks through the crooked planks of a youth ministry, run by Robert Katende(David Oyelowo).
+IR: <attr type="time" literal="One day," token="One day,">
+PY: <attr type="time" literal="One day," token="One day, One day,">
+*/
+void iKnowUnitTests::Saskia2(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"One day, while selling corn, Phiona looks through the crooked planks of a youth ministry, run by Robert Katende(David Oyelowo).");
+	engine.index(text_source, "en");
+	const Sentence& sent1 = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent1.sent_attributes.begin(); it_marker != sent1.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == DateTime) {
+			if (attribute.marker_ != string("One day,"))
+				throw std::runtime_error("DateTime marker \"One day,\" not correct !" + string(pMessage));
+		}
+	}
+
+}
+
+/* Reported by Saskia
+S C3aR(-/-) mice on HFD are transiently resistant to diet-induced obesity during a 8 week period.[1]
+IR: <attr type = "duration" literal = "8 week period." token = "8 week period.">
+PY : <attr type = "duration" literal = "8 week period." token = "8 week">
+*/
+void iKnowUnitTests::Saskia1(const char* pMessage)
+{
+	iKnowEngine engine;
+
+	String text_source = IkStringEncoding::UTF8ToBase(u8"C3aR(-/-)\nmice on HFD are transiently resistant to diet - induced obesity during a 8 week\nperiod.");
+	engine.index(text_source, "en");
+
+	const Sentence& sent1 = *engine.m_index.sentences.begin(); // get sentence reference
+	int count_attributes = 0;
+	for (AttributeMarkerIterator it_marker = sent1.sent_attributes.begin(); it_marker != sent1.sent_attributes.end(); ++it_marker, ++count_attributes) { // iterate over sentence attributes
+		const Sent_Attribute& attribute = *it_marker;
+
+		if (attribute.type_ == Duration) {
+			if (attribute.marker_ != string("8 week period."))
+				throw std::runtime_error("Duration marker \"8 week period.\" not correct !" + string(pMessage));
+		}
 	}
 }
 
@@ -215,7 +525,8 @@ void iKnowUnitTests::test7(const char* pMessage) // https://github.com/intersyst
 {
 	iKnowEngine engine;
 
-	String text_source = IkStringEncoding::UTF8ToBase(u8"北海道・阿寒（あかん）湖温泉で自然体験ツアーに出かけた。"); //  = > All Hiragana
+	string text_source_utf8 = u8"北海道・阿寒（あかん）湖温泉で自然体験ツアーに出かけた。";
+	String text_source = IkStringEncoding::UTF8ToBase(text_source_utf8); //  = > All Hiragana
 	engine.index(text_source, "ja", true);
 	bool bFurigana = false;
 	for (auto it = engine.m_traces.begin(); it != engine.m_traces.end(); ++it) { // scan the traces
@@ -339,6 +650,9 @@ void iKnowUnitTests::test5(const char* pMessage) { // User DCT test
 				}
 			}
 	}
+
+	// User dictionary is static, if not unloaded, it stays active.
+	engine.unloadUserDictionary();
 }
 
 void iKnowUnitTests::test4(const char* pMessage) { // Naomi detects missing SBegin/SEnd labels
@@ -438,8 +752,10 @@ void iKnowUnitTests::test1(const char *pMessage) { // Japanese text should produ
 	engine.index(text_source, "ja");
 	if (engine.m_index.sentences.empty())
 		throw std::runtime_error(std::string(pMessage));
-	if (engine.m_index.sentences[0].path.empty()) {
+	if (engine.m_index.sentences[0].sent_attributes[0].type_ != EntityVector)
 		throw std::runtime_error(std::string(pMessage));
+	if (engine.m_index.sentences[0].path.empty()) {
+		throw std::runtime_error(std::string("Engine *must* generate Path data, even for Japanese"));
 	}
 	map<size_t, string> mapTextSource;
 	map<size_t, double> mapDominantConcepts;

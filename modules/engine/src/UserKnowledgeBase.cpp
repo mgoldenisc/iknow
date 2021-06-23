@@ -18,6 +18,7 @@ using namespace iknow::core;
 using namespace iknow::shell;
 
 typedef std::map<String, FastLabelSet::Index> LabelIndexMap;
+typedef map<FastLabelSet::Index, vector<Phase>> LabelIndex2PhasesMap; // maps label indexes to phase collection, used to verify if label phases match with rule phase
 
 //A functor to convert a raw CacheList into a Kb* type
 template<typename KbT>
@@ -37,10 +38,13 @@ private:
 
 class WithLabelMap {
 protected:
-	WithLabelMap(LabelIndexMap& map) : map_(map) {}
+	WithLabelMap(LabelIndexMap& map) : map_(map), p_map_phases_(NULL) {}
+	WithLabelMap(LabelIndexMap& map, LabelIndex2PhasesMap* p_map_phases) : map_(map), p_map_phases_(p_map_phases) {}
 	LabelIndexMap& GetLabelMap() { return map_; }
+	LabelIndex2PhasesMap& GetLabelPhasesMap() { return (*p_map_phases_); }
 private:
 	LabelIndexMap& map_;
+	LabelIndex2PhasesMap* p_map_phases_;
 	void operator=(const WithLabelMap&);
 };
 
@@ -74,7 +78,7 @@ public:
 	RawListToKb(RawAllocator& allocator, LabelIndexMap& map, size_t& max_lexrep_size, size_t& max_token_size) : WithAllocator(allocator), WithLabelMap(map), max_lexrep_size_(max_lexrep_size), max_token_size_(max_token_size) {}
 
 	KbLexrep operator()(iKnow_KB_Lexrep kb_lexrep) {
-		KbLexrep lexrep(GetAllocator(), GetLabelMap(), kb_lexrep.Token, kb_lexrep.Labels);
+		KbLexrep lexrep(GetAllocator(), GetLabelMap(), kb_lexrep.Token, kb_lexrep.Labels, kb_lexrep.Meta);
 		size_t size = lexrep.TokenCount();
 		if (size > max_lexrep_size_) max_lexrep_size_ = size;
 		// for Japanese, we need to calculate the maximum token size, this is an unnecessary step for non-Asian languages, but it's only done while loading, so no runtime performance while indexing...
@@ -95,10 +99,10 @@ template<>
 class RawListToKb<KbRule> : private WithAllocator, private WithLabelMap {
 public:
 	typedef KbRule output_type;
-	RawListToKb(RawAllocator& allocator, LabelIndexMap& map) : WithAllocator(allocator), WithLabelMap(map) {}
+	RawListToKb(RawAllocator& allocator, LabelIndexMap& map, LabelIndex2PhasesMap* p_label_phases) : WithAllocator(allocator), WithLabelMap(map, p_label_phases) {}
 
 	KbRule operator()(iKnow_KB_Rule rule) {
-		return KbRule(GetAllocator(), GetLabelMap(), rule.InputPattern, rule.OutputPattern, iknow::core::PhaseFromString(rule.Phase));
+		return KbRule(GetAllocator(), GetLabelMap(), GetLabelPhasesMap(), rule.InputPattern, rule.OutputPattern, iknow::core::PhaseFromString(rule.Phase));
 	}
 
 private:
@@ -228,7 +232,7 @@ unsigned char* data_buffer(bool b_init)
 	return (unsigned char*)(b_init ? memset(udct_memory, 0, sizeof udct_memory) : udct_memory);
 
 }
-unsigned char* iknow::shell::base_pointer = NULL;
+const unsigned char* iknow::shell::base_pointer = NULL;
 
 unsigned char* UserKnowledgeBase::generateRAW(bool IsCompiled)
 {
@@ -245,6 +249,7 @@ unsigned char* UserKnowledgeBase::generateRAW(bool IsCompiled)
 	BasePointerFrame frame_guard(reinterpret_cast<unsigned char*>(kb_data_)); // OFFSETPTRGUARD
 
 	LabelIndexMap label_index_map; // label names mapped to (internal) label indexes.
+	LabelIndex2PhasesMap label_index_phases_map; // label indexes to label phases.
 	AttributeMapBuilder attribute_map_builder;
 
 	size_t labels_count = static_cast<size_t>(LabelCount());
@@ -269,6 +274,13 @@ unsigned char* UserKnowledgeBase::generateRAW(bool IsCompiled)
 		labels_table_builder.Insert(label->PointerToName(), allocator.Insert(i));
 		//TODO: Other components should just use the kb_data_->labels table.
 		label_index_map.insert(LabelIndexMap::value_type(label->Name(), static_cast<FastLabelSet::Index>(i)));
+
+		// collect label phases
+		for (auto it = label->GetPhasesBegin(); it != label->GetPhasesEnd(); ++it) {
+			const Phase a_phase = *it;
+			label_index_phases_map[static_cast<FastLabelSet::Index>(i)].push_back(a_phase);
+		}
+
 	}
 	kb_data_->labels = allocator.Insert(labels_table_builder.Build(allocator));
 
@@ -293,7 +305,7 @@ unsigned char* UserKnowledgeBase::generateRAW(bool IsCompiled)
 	}
 	//Rules
 	{
-		RawListToKb<KbRule> rule_transformer(allocator, label_index_map);
+		RawListToKb<KbRule> rule_transformer(allocator, label_index_map, &label_index_phases_map);
 		const KbRule* begin, * end;
 		LoadKbRange(kb_rules.begin(), kb_rules.end(), kb_rules.size(), rule_transformer, allocator, begin, end);
 		kb_data_->rules_begin = begin;
@@ -460,9 +472,9 @@ std::vector<std::string> split_row(std::string row_text, char split)
 
 iKnow_KB_Label LabelFromString(vector<string>& row_label, string& isDefault) // ClassMethod LabelFromString(line As %String, ByRef isDefault = "") As Label
 {
-	iKnow_KB_Label label; // Set label = ..%New()
-	label.Name = row_label[3 - 1]; // Set label.Name = $PIECE(line, ";", 3)
-	label.Type = row_label[4 - 1]; // Set label.Type = $PIECE(line, ";", 4)
+	iKnow_KB_Label label(row_label[3 - 1], row_label[4 - 1]); // Set label = ..%New()
+	// label.Name = row_label[3 - 1]; // Set label.Name = $PIECE(line, ";", 3)
+	// label.Type = row_label[4 - 1]; // Set label.Type = $PIECE(line, ";", 4)
 	isDefault = row_label[6 - 1]; // Set isDefault = $PIECE(line, ";", 6)
 
 	if (row_label.size() > 7) label.Attributes = row_label[8 - 1]; // Set label.Attributes = $PIECE(line, ";", 8)
@@ -476,44 +488,14 @@ iKnow_KB_Label LabelFromString(vector<string>& row_label, string& isDefault) // 
 //
 UserKnowledgeBase::UserKnowledgeBase() : m_IsDirty(true)
 {
-	vector<string> special_labels = { // language independent labels
-	";1,$;Concept;typeConcept;;0;",
-	";1,$;Join;typeOther;;0;",
-	";1,$;JoinReverse;typeOther;;0;",
-	";1,$;NonRelevant;typeOther;;0;",
-	";1,$;Punctuation;typeEndConcept;;0;",
-	";1,$;Relation;typeRelation;;0;",
-	";1,$;Numeric;typeOther;;0;",
-	";1,$;Unknown;typeOther;;0;",
-	";1,$;CapitalAll;typeAttribute;;0;",
-	";1,$;CapitalInitial;typeAttribute;;0;",
-	";1,$;CapitalMixed;typeAttribute;;0;",
-	";1,$;NonSemantic;typeAttribute;;0;Entity(NonSemantic)",
-	";1,$;User1;typeAttribute;;0;",
-	";1,$;User2;typeAttribute;;0;",
-	";1,$;User3;typeAttribute;;0;",
-	";1,$;AlphaBetic;typeConcept;;0;",
-	";1,$;Space;typeOther;;0;",
-	";1,$;Katakana;typeConcept;;0;",
-	";1,$;UDNegation;typeAttribute;;0;",
-	";1,$;UDPosSentiment;typeAttribute;;0;",
-	";1,$;UDNegSentiment;typeAttribute;;0;",
-	";1,$;UDConcept;typeConcept;;0;",
-	";1,$;UDRelation;typeRelation;;0;",
-	";1,$;UDNonRelevant;typeNonRelevant;;0;",
-	";1,$;UDUnit;typeAttribute;;0;",
-	";1,$;UDNumber;typeAttribute;;0;",
-	";1,$;UDTime;typeAttribute;;0;"
-	};
-
 	string isDefault = "";
-	for (vector<string>::iterator it = special_labels.begin(); it != special_labels.end(); ++it) {
+	for (vector<string>::const_iterator it = iknow::csvdata::special_labels.begin(); it != special_labels.end(); ++it) {
 		vector<string> row_label = split_row(*it, ';');
 		kb_labels.push_back(LabelFromString(row_label, isDefault)); // create and add label object
 	}
 }
 
-int UserKnowledgeBase::addLexrepLabel(const std::string& token, const std::string& labels) {
+int UserKnowledgeBase::addLexrepLabel(const std::string& token, const std::string& labels, const std::string meta) {
 	size_t startIndex = 0;
 	size_t  endIndex = 0;
 	while ((endIndex = labels.find(';', startIndex)) < labels.size())
@@ -529,7 +511,11 @@ int UserKnowledgeBase::addLexrepLabel(const std::string& token, const std::strin
 		if (!IsValidLabel(label))
 			return -1;
 	}
-	kb_lexreps.push_back(iKnow_KB_Lexrep(token, labels));
+	if (meta.empty())
+		kb_lexreps.push_back(iKnow_KB_Lexrep(token, labels));
+	else
+		kb_lexreps.push_back(iKnow_KB_Lexrep(token, meta, labels));
+
 	m_IsDirty = true; // need recompilation
 	return 0;
 }

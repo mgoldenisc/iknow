@@ -1,8 +1,8 @@
-static const LabelId Labels0[] = {97,} /* ESInf; */; 
-static const LabelId Labels1[] = {99,} /* ESLayout; */; 
-static const LabelId Labels2[] = {111,} /* ESNumber; */; 
-static const LabelId Labels3[] = {111,112,} /* ESNumber;ESNumberNotyear; */; 
-static const LabelId Labels4[] = {111,118,112,} /* ESNumber;ESPercent;ESNumberNotyear; */; 
-static const LabelId Labels5[] = {131,} /* ESVerb; */; 
+static const LabelId Labels0[] = {101,} /* ESInf; */; 
+static const LabelId Labels1[] = {103,} /* ESLayout; */; 
+static const LabelId Labels2[] = {115,} /* ESNumber; */; 
+static const LabelId Labels3[] = {115,116,} /* ESNumber;ESNumberNotyear; */; 
+static const LabelId Labels4[] = {115,122,116,} /* ESNumber;ESPercent;ESNumberNotyear; */; 
+static const LabelId Labels5[] = {135,} /* ESVerb; */; 
 
 static const char* metalist0 = " ";

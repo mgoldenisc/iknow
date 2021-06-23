@@ -202,11 +202,9 @@ static void iKnowEngineOutputCallback(iknow::core::IkIndexOutput* data, iknow::c
 					}
 				}
 			}
-			std::map<iknowdata::Attribute, Sent_Attribute*> mapLexrepAttributes;
-			for (IkMergedLexrep::const_iterator it = lexrep->LexrepsBegin(); it != lexrep->LexrepsEnd(); it++) { // Scan for label attributes : scroll the single lexreps
-				std::string a_marker = iknow::base::IkStringEncoding::BaseToUTF8(it->GetValue()); // the attribute marker, Literal representation
-				char certainty_data = it->GetCertainty(); // certainty char, "0" to "9"
-
+			std::map<iknowdata::Attribute, size_t> mapLexrepAttributes;
+			for (IkMergedLexrep::const_iterator it = lexrep->LexrepsBegin(); it != lexrep->LexrepsEnd(); it++) { // Scan for label attributes : scroll the single lexreps		
+				std::set<iknowdata::Attribute> setTokenAttributes; // token as marker
 				const size_t label_count = it->NumberOfLabels();
 				for (size_t i = 0; i < label_count; ++i) {
 					FastLabelSet::Index idx_label = it->GetLabelIndexAt(i);
@@ -223,17 +221,30 @@ static void iKnowEngineOutputCallback(iknow::core::IkIndexOutput* data, iknow::c
 									id_property = kb->PropertyIdForName(param_attribute);
 							}
 							iknowdata::Attribute a_type = static_cast<iknowdata::Attribute>(id_property);
+							std::string a_marker = iknow::base::IkStringEncoding::BaseToUTF8(it->GetValue()); // the attribute marker, Literal representation
+							if (it != lexrep->LexrepsBegin()) { // if token starts with " ", remove it since it belongs to the previous token
+								if (a_marker[0] == ' ') { // remove first token
+									size_t next_space = a_marker.find(' ', 1);
+									if (next_space != string::npos) {
+										string stripped(&a_marker[next_space+1]);
+										a_marker = stripped;
+									}
+								}
+							}
 							if (a_type != iknowdata::Attribute::Measurement) { // measurements are handled separately
 								if (mapLexrepAttributes.count(a_type)) { // continue existing
-									Sent_Attribute* p_att = mapLexrepAttributes[a_type];
+									if (setTokenAttributes.count(a_type)) // token already in.
+										continue;
 
-									p_att->offset_stop_ = it->GetTextPointerEnd() - pText; // enlarge the literal
-									p_att->marker_ += string(" ") + a_marker; // add the extra marker
+									size_t idxSentAttribute = mapLexrepAttributes[a_type];
+									sentence_data.sent_attributes[idxSentAttribute].offset_stop_ = it->GetTextPointerEnd() - pText; // enlarge the literal
+									sentence_data.sent_attributes[idxSentAttribute].marker_ += string(" ") + a_marker; // add the extra marker
 								}
 								else { // new
 									sentence_data.sent_attributes.push_back(Sent_Attribute(a_type, it->GetTextPointerBegin() - pText, it->GetTextPointerEnd() - pText, a_marker)); // write marker info
 									sentence_data.sent_attributes.back().entity_ref = static_cast<unsigned short>(sentence_data.entities.size()); // connect sentence attribute to entity
 									if (id_property == IKATTCERTAINTY) { // certainty attribute, emit the certainty level
+										char certainty_data = it->GetCertainty(); // certainty char, "0" to "9"
 										if (certainty_data != '\0') {
 											std::string certainty_value = "0";
 											certainty_value[0] = certainty_data; // '0' to '9'
@@ -241,7 +252,8 @@ static void iKnowEngineOutputCallback(iknow::core::IkIndexOutput* data, iknow::c
 											ref.value_ = certainty_value;
 										}
 									}
-									mapLexrepAttributes.insert(make_pair(a_type, &sentence_data.sent_attributes.back())); // link lexrep attribute to data structure
+									mapLexrepAttributes.insert(make_pair(a_type, sentence_data.sent_attributes.size()-1)); // link lexrep attribute to data structure
+									setTokenAttributes.insert(a_type);
 								}
 							}
 						}
@@ -260,13 +272,19 @@ static void iKnowEngineOutputCallback(iknow::core::IkIndexOutput* data, iknow::c
 			if (!entity_vector.empty()) { // emit entity vectors
 				// Sent_Attribute::aType a_type = static_cast<Sent_Attribute::aType>(entity_vector_prop_id);
 
+				static const String kEntityVectorTypeName = IkStringEncoding::UTF8ToBase("EntityVector");
+				PropertyId entity_vector_prop_id = kb->PropertyIdForName(kEntityVectorTypeName);
+				iknowdata::Attribute a_type = static_cast<iknowdata::Attribute>(entity_vector_prop_id);
+
+				sentence_data.sent_attributes.push_back(Sent_Attribute(a_type)); // generate entity vector marker
+				// sentence_data.sent_attributes.back().entity_ref = static_cast<unsigned short>(sentence_data.entities.size()); // connect sentence attribute to entity
+
 				for (IkSentence::EntityVector::const_iterator i = entity_vector.begin(); i != entity_vector.end(); ++i) { // collect entity id's
-					// (*this)(*i + 1); //occurrence ids are 1-based
-					sentence_data.path.push_back((unsigned short)*i); 
+					sentence_data.sent_attributes.back().entity_vector.push_back((unsigned short)*i);
 				}
 			}
 		}
-		else { // normal path
+		{ // handle path attributes
 			{	// collect path attribute expansions
 				DirectOutputPaths& sent_paths = data->paths_[udata.iknow_sentences.size()]; // paths for the sentence (in fact, only one per sentence after introducing path_relevants)
 				for (DirectOutputPaths::iterator it_path = sent_paths.begin(); it_path != sent_paths.end(); ++it_path) // iterate all paths (in fact, only one...)
@@ -325,48 +343,7 @@ iKnowEngine::~iKnowEngine() // Destructor
 {
 }
 
-typedef std::map<iknow::base::String, iknow::core::IkKnowledgebase*> KnowledgebaseMap;
-
-extern "C" {
-	extern const unsigned char kb_en_data[];
-	extern const unsigned char kb_de_data[];
-	extern const unsigned char kb_ru_data[];
-	extern const unsigned char kb_es_data[];
-	extern const unsigned char kb_fr_data[];
-	extern const unsigned char kb_ja_data[];
-	extern const unsigned char kb_nl_data[];
-	extern const unsigned char kb_pt_data[];
-	extern const unsigned char kb_sv_data[];
-	extern const unsigned char kb_uk_data[];
-	extern const unsigned char kb_cs_data[];
-}
-
-struct LanguageCodeMap {
-	LanguageCodeMap() {
-		map.insert(CodeMap::value_type("en", const_cast<unsigned char *>(&(kb_en_data[0]))));
-		map.insert(CodeMap::value_type("de", const_cast<unsigned char *>(&(kb_de_data[0]))));
-		map.insert(CodeMap::value_type("ru", const_cast<unsigned char *>(&(kb_ru_data[0]))));
-		map.insert(CodeMap::value_type("es", const_cast<unsigned char *>(&(kb_es_data[0]))));
-		map.insert(CodeMap::value_type("fr", const_cast<unsigned char *>(&(kb_fr_data[0]))));
-		map.insert(CodeMap::value_type("ja", const_cast<unsigned char *>(&(kb_ja_data[0]))));
-		map.insert(CodeMap::value_type("nl", const_cast<unsigned char *>(&(kb_nl_data[0]))));
-		map.insert(CodeMap::value_type("pt", const_cast<unsigned char *>(&(kb_pt_data[0]))));
-		map.insert(CodeMap::value_type("sv", const_cast<unsigned char *>(&(kb_sv_data[0]))));
-		map.insert(CodeMap::value_type("uk", const_cast<unsigned char *>(&(kb_uk_data[0]))));
-		map.insert(CodeMap::value_type("cs", const_cast<unsigned char *>(&(kb_cs_data[0]))));
-	}
-	unsigned char *Lookup(const std::string& language_name) const {
-		CodeMap::const_iterator i = map.find(language_name);
-		return ((i == map.end()) ? NULL : i->second);
-	}
-
-	typedef std::map<std::string, unsigned char *> CodeMap;
-	CodeMap map;
-};
-
-const static LanguageCodeMap language_code_map;
 static std::mutex mtx;           // mutex for process.IndexFunc critical section
-
 
 void iKnowEngine::index(iknow::base::String& text_input, const std::string& utf8language, bool b_trace)
 {
@@ -380,10 +357,12 @@ void iKnowEngine::index(iknow::base::String& text_input, const std::string& utf8
 	m_traces.clear();
 	UData udata(m_index.sentences, m_index.proximity, m_traces);
 
-	SharedMemoryKnowledgebase skb = language_code_map.Lookup(utf8language);
-
-	CompiledKnowledgebase ckb(&skb, utf8language);
-	CProcess::type_languageKbMap temp_map;
+	iknow::model::RawDataPointer kb_raw_data = CompiledKnowledgebase::GetRawData(utf8language);
+	if (!kb_raw_data) { // no kb raw data in language module
+		throw ExceptionFrom<iKnowEngine>("Language:\""+string(utf8language)+"\" module has no embedded model data : old stye KB used !");
+	}
+	CompiledKnowledgebase ckb(kb_raw_data, utf8language);
+	CProcess::type_languageKbMap temp_map; // storage for all KB's
 	temp_map.insert(CProcess::type_languageKbMap::value_type(IkStringEncoding::UTF8ToBase(utf8language), &ckb));
 	CProcess process(temp_map);
 
@@ -405,7 +384,11 @@ void iKnowEngine::index(const std::string& text_source, const std::string& langu
 
 std::string iKnowEngine::NormalizeText(const string& text_source, const std::string& language, bool bUserDct, bool bLowerCase, bool bStripPunct) {
 	try {
-		SharedMemoryKnowledgebase skb = language_code_map.Lookup(language); //No ALI for normalization: We need a KB.
+		iknow::model::RawDataPointer kb_raw_data = CompiledKnowledgebase::GetRawData(language);
+		if (!kb_raw_data) { // no kb raw data in language module
+			throw ExceptionFrom<iKnowEngine>("Language:\"" + string(language) + "\" module has no embedded model data : old stye KB used !");
+		}
+		SharedMemoryKnowledgebase skb = kb_raw_data; //No ALI for normalization: We need a KB.
 		IkKnowledgebase* kb = &skb;
 		IkKnowledgebase* ud_kb = NULL;
 
@@ -446,6 +429,19 @@ void UserDictionary::addEntry(const std::string& literal, const string& literal_
 void UserDictionary::addSEndCondition(const std::string& literal, bool b_end)
 {
 	m_user_data.addSEndCondition(literal, b_end);
+}
+
+// Add Certainty level.
+int UserDictionary::addCertaintyLevel(const std::string& literal, int level)
+{
+	if (level < 0 || level>9)
+		return iKnowEngine::iknow_certainty_level_out_of_range;
+
+	string normalized = iKnowEngine::NormalizeText(literal, "en"); // normalize the literal
+	string meta = string("c=0");
+	meta[2] = (char) ((int)'0'+level);
+	m_user_data.addLexrepLabel(normalized, "UDCertainty", meta); // add to the udct lexreps
+	return 0;
 }
 
 // Shortcut for known UD labels

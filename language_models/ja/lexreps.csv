@@ -2813,9 +2813,9 @@
 ;;」するもの;;BracketClose;-;JPSuruVerb;JPEndRelation;Join;-;JPNonRelevant;Join;
 ;;)および;;BracketClose;-;JPConj;Join;Join;
 ;;)及び;;BracketClose;-;JPConj;Join;
-;;\)する;;BracketClose;-;JPVerb;Join;
+;;)する;;BracketClose;-;JPVerb;Join;
 
-;;\)のみであり;;BracketClose;-;JPPartAdvNOUN;Join;-;JPLinkV;Join;Join;
+;;)のみであり;;BracketClose;-;JPPartAdvNOUN;Join;-;JPLinkV;Join;Join;
 ;;」ため;;BracketClose;-;JPPartAdvNOUN;Join;
 ;;」時に;;BracketClose;-;JPPartAdvNOUN;Join;
 ;;」時の;;BracketClose;-;JPPartAdvNOUN;Join;
@@ -2833,8 +2833,10 @@
 ;;」もあり;;BracketClose;-;JPParticleMO;-;JPVerb;JPVerbBase;Join;
 ;;」もあります;;BracketClose;-;JPParticleMO;-;JPVerb;Join;Join;Join;
 ;;」もありますが;;BracketClose;-;JPParticleMO;-;JPVerb;Join;Join;Join;-;JPConj;
-;;\)向けに;;BracketClose;-;JPPartAdvNOUN;Join;Join; /* wait for alphanumeric implementation */
-;;\)内に;;BracketClose;-;JPPartAdvNOUN;Join; /* wait for alpha numeric implementation */
+;;)向けに;;BracketClose;-;JPPartAdvNOUN;Join;Join; /* wait for alphanumeric implementation */
+
+;;)内に;;BracketClose;-;JPPartAdvNOUN;Join; /* wait for alpha numeric implementation */
+
 
 ;;(ああ|あぁ);;JPExpressionNR;
 ;;ああ、;;JPExpressionNR;Join;-;JPComma;
@@ -2909,7 +2911,7 @@
 ;;あるわけがありません;;JPVerb;JPNegation;
 ;;あるわけがない;;JPVerb;JPNegation;
 ;;あるわけです;;JParu;JPVerb;JPEndRelation;Join;-;JPExpressionNR;Join;Join;Join
-;
+
 ;;あるわけではありません;;JPVerb;JPNegation;
 ;;あるわけではない;;JPVerb;JPNegation;
 ;;あるわけでもありません;;JPVerb;JPNegation;
@@ -3328,9 +3330,9 @@
 ;;かも知れませんが;;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join;-;JPConj;JPEndRelation;
 /* Expanded previously by DELVE....;;(かもしれませんが|かも知れませんが);;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join;-;JPConj;JPEndRelation;
 ;;かもしれませんから;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;-;JPConj;JPEndRelation;Join
-;
+
 ;;かも知れませんから;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;-;JPConj;JPEndRelation;Join
-;
+
 /* Expanded previously by DELVE....;;(かもしれませんから|かも知れませんから);;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;-;JPConj;JPEndRelation;Join
 ;;かもしれませんけど;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;-;JPConj;Join;
 ;;かも知れませんけど;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;-;JPConj;Join;
@@ -4445,7 +4447,7 @@
 ;;ぐようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
 ;;すようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
 ;;つようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
-;
+
 ;;ぶようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
 ;;むようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
 ;;るようになったら;;JPVerbEndOther;-;JPPartAdvNOUN;Join;Join;Join;Join;Join;Join
@@ -4681,7 +4683,7 @@
 ;;ごらんになり;;JPSuffixVerb;JPVerbNoun;
 ;;(これ以外|これ以外に);;JPAdvNR;
 ;;これが;;JPPronDemon;Join;-;JPga
-;
+
 ;;これくらい;;JPAdvNR;
 ;;これこそ(|が);;JPAdvNR;
 ;;これだけでは;;JPAdvNR;
@@ -5307,7 +5309,7 @@
 ;;たところです;;JPta;-;JPPartAdvNOUN;Join;Join;-;JPdesu;Join;
 ;;たところですが;;JPta;-;JPPartAdvNOUN;Join;Join;-;JPdesu;Join;-;JPConj;JPEndRelation;
 ;;たところでは;;JPta;-;JPPartAdvNOUN;Join;Join;Join;-;JPParticleHA
-;
+
 ;;たところに;;JPta;-;JPPartAdvNOUN;Join;Join;Join;
 ;;たところによると;;JPta;-;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;Join;Join;Join;
 ;;たところ、;;JPta;-;JPPartAdvNOUN;JPEndRelation;Join;Join;-;JPComma;
@@ -5851,6 +5853,7 @@
 ;;とするが如く;;JPSuffixVerb;
 ;;とすると;;JPEndRelation;-;JPExpressionNR;Join;Join;
 ;;とするとき、;;JPPartAdvNOUN;JPEndRelation;
+;;とするところ(|も);;JPRelation;
 ;;とするのは;;JPPartAdvNOUN;JPEndRelation;
 ;;とせがむ;;JPto;-;JPVerb;JPVerbBase;Join;Join;
 ;;とせず;;JPPartAdvNOUN;JPNegation;JPEndRelation;Predicate;
@@ -6023,7 +6026,7 @@
 ;;なってほしい;;JPNaruVerb;
 ;;なってみて;;JPNaruVerb;JPVerb;JPConjVerb;
 ;;なときに;;JPSuffixNoun;Join;Join;-;JPParticleNI
-;
+
 ;;な時に;;JPSuffixNoun;Join;-;JPParticleNI;
 ;;なときには;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;-;JPParticleHA;
 ;;な時には;;JPPartAdvNOUN;JPEndRelation;Join;Join;-;JPParticleHA;
@@ -6922,7 +6925,7 @@
 ;;間じゅうは;;JPPartAdvNOUN;JPEndRelation;Join;Join;Join;-;JPParticleHA;
 ;;朝起き;;JPCon;DateTime;JPDateTime;-;JPVerbNoun;Join;
 ;;当たり前と言えば当たり前;;JPAdjNoun;Join;Join;Join;-;NonRelevant;Join;Join;Join;Join;Join;Join;Join;
-;;\)以上。;;JPNonRelevant;
+;;)以上。;;JPNonRelevant;
 ;;以上。;;JPSuffixNoun;Join;-;JPPunctuation;
 ;;以上と;;JPSuffixNoun;Join;-;JPNonRelevant;
 ;;以上という;;JPSuffixNoun;Join;-;JPtoiu;Join;Join;
@@ -7831,7 +7834,7 @@
 ;;のすべて;;JPSuffixNoun;
 ;;」のすべて;;JPSuffixNoun;
 ;;”のすべて;;JPSuffixNoun;
-;;\)のすべて;;JPSuffixNoun;
+;;)のすべて;;JPSuffixNoun;
 ;;等のすべて;;JPSuffixNoun;
 ;;までのすべて;;JPSuffixNoun;
 ;;.のすべて;;JPSuffixNoun;
@@ -8012,7 +8015,7 @@
 ;;大目に;;JPAdv;
 ;;おおよそ;;JPAdv;
 ;;(おしげもなく|惜しげもなく);;JPAdv;
-;;遅くとも;;JPAdv;
+;;遅くとも;;JPAdvTime;JPDateTime;
 ;;おっかなびっくり;;JPAdv;
 ;;驚くことに;;JPAdv;
 ;;思いがけず;;JPAdv;
@@ -8608,7 +8611,7 @@
 
 ;;転々;;JPAdv;JPSuruNoun;
 
-;;当時;;JPAdvTime;JPCon;
+;;当時;;JPAdvTime;JPCon;JPTime;
 ;;、当時、;;JPComma;-;JPAdvNR;Join;-;JPComma;
 
 ;;畢竟;;JPAdv;
@@ -9044,13 +9047,14 @@
 ;;土日祝;;JPBeginConcept;JPDateTime;
 ;;金土日祝;;JPBeginConcept;JPDateTime;
 ;;金土日祝前日;;JPBeginConcept;JPDateTime;
-;;日目;;JPCount;
+;;日目;;JPTime;
 ;;月~金;;JPBeginConcept;JPDateTime;
 
 
 ;;冬期;;JPAdvTime;JPCon;
 
-;;同日;;JPAdvTime;JPCon;
+;;同日;;JPTime;JPAdvTime;
+;;同日中に;;JPTime;JPCon;Join;Join;-;JPParticleNI;
 ;;(同日付|同日付け);;NonRelevant;
 
 ;;日ごろ;;JPAdvTime;JPCon;
@@ -9096,7 +9100,7 @@
 
 ;;直前;;JPAdvTime;JPCon;
 
-;;次;;JPAdvTime;JPCount;JPVerbOther;JPSuffixNoun;
+;;次;;JPAdvTime;JPVerbOther;JPSuffixNoun;
 ;;ここに来て;;JPAdvTime;JPExpressionR;
 
 ;;一目;;JPAdvTime;JPSuruNoun;
@@ -9116,6 +9120,9 @@
 ;;後ほど;;JPAdvTime;
 
 ;;早くも;;JPAdvTime;
+;;早ければ;;JPAdvTime;JPDateTime;
+;;早ければ早いほど;;JPAdvTime;JPDateTime;
+;;早ければ早い;;JPAdj;JPDateTime;
 ;;日々;;JPAdvTime;JPCon;
 ;;(まもなく|間もなく);;JPAdvTime;
 ;;(まもないころ|間もないころ);;JPAdvTime;
@@ -9291,11 +9298,13 @@
 ;;毎回;;JPAdvTime;
 ;;(毎日|まいにち);;JPCon;DateTime;JPDateTime;JPSeparateDate;
 ;;毎年;;JPCon;DateTime;JPDateTime;JPSeparateDate;
+;;終日;;JPCon;DateTime;JPDateTime;
+
 ;;毎年恒例;;JPCon;DateTime;JPDateTime;
 ;;毎年度;;JPCon;DateTime;JPDateTime;JPSeparateDate;
 ;;夜通し;;JPAdvTime;
 ;;翌週;;JPAdvTime;
-;;来月;;JPAdvTime;JPCon;JPMonth;
+;;来月;;JPCon;DateTime;JPDateTime;JPMonth;
 ;;来週(|中);;JPSeparateDate;JPCon;DateTime;JPDateTime;
 
 ;;連日;;JPAdvTime;JPCon;
@@ -9853,12 +9862,14 @@
 ;;“;;BracketOpen
 ;;『;;BracketOpen;
 ;;\(;;BracketOpen;JPPlusMinus;
+
 ;;\[;;BracketOpen;
 ;;・;;JPnakaguro;
 ;;」;;BracketClose;
 ;;”;;BracketClose;
 ;;』;;BracketClose;
-;;\);;BracketClose;
+;;);;BracketClose;
+
 ;;\];;BracketClose;
 ;;.;;JPPeriod;
 ;;=;;NonRelevant;
@@ -9991,8 +10002,9 @@
 
 ;;月度;;JPTime;JPCount;
 ;;年度;;JPTime;JPCount;
+;;年次;;JPCon;
 ;;年度末;;JPTime;JPCount;
-;;年間;;JPCount;JPCon;
+;;年間;;JPTime;JPCon;
 ;;年比;;JPCon;
 ;;年前;;JPCount;JPTime;
 ;;年前後;;JPCount;JPTime;-;JPPartAdvNOUN;Join;
@@ -10006,13 +10018,16 @@
 
 ;;年目;;JPTime;JPCount;
 
-;;年代;;JPTime;JPCount;
+;;年代;;JPTime;
 ;;年代別;;JPCon;
 
-;;年生;;JPCount;
+;;年生;;JPCon;
+;;年生き;;JPCon;JPTime;-;JPVerbNoun;Join;
 ;;年生まれ;;JPCount;-;JPVerbNoun;Join;Join;
 ;;年生まれない;;JPCount;-;JPVerb;JPNegation;Join;Join;Join;Join;
 ;;年生物;;JPCount;-;JPCon;Join;
+
+;;年率;;JPCon;
 
 ;;点目;;JPCount;
 
@@ -10043,7 +10058,7 @@
 
 ;;親等;;JPCount;
 ;;日;;JPCount;JPDate;JPSuffixNoun;JPTime;
-;;日間;;JPCount;JPRule3437;
+;;日間;;JPTime;JPRule3437;
 ;;日後;;JPCount;JPTime;
 ;;日前;;JPCount;JPTime;
 ;;日朝;;JPCount;JPCon;JPDate;
@@ -10165,7 +10180,7 @@
 ;;本;;JPCount;JPCon;JPRule3437;
 ;;階;;JPCount;JPCon;
 ;;丁目;;JPCount;
-;;番;;JPCount;
+;;番;;JPCon;
 ;;文字;;JPCount;JPSuffixNoun;JPCon;
 
 ;;針;;JPCount;JPCon;
@@ -13013,7 +13028,7 @@
 ;;つく;;JPVerbOther;JPVerb;JPVerbBase;JPHiragana;JPSuffixVerb;
 ;;つくらい;;JPCount;-;JPSuffixNoun;Join;Join;
 ;;もつく;;JPmo;-;JPVerb;JPVerbOther;Join;
-;;つくね\);;JPCon;Join;Join;-;BracketClose;
+;;つくね);;JPCon;Join;Join;-;BracketClose;
 
 ;;づく;;JPSuffixVerb;JPVerbOther;
 ;;ググ;;JPVerbOther;
@@ -23140,7 +23155,8 @@
 ;;を手にと;;JPParticleWO;-;JPVerbOther;Join;Join;
 /* Expanded previously by DELVE....;;(を手に取|を手にと);;JPParticleWO;-;JPVerbOther;Join;Join;
 ;;を手に取り;;JPParticleWO;-;JPVerbNoun;Join;Join;Join;
-/* Expanded previously by DELVE....;;(を手に取り|を手に取り);;JPParticleWO;-;JPVerbNoun;Join;Join;Join;
+;;を手にとり;;JPParticleWO;-;JPVerbNoun;Join;Join;Join;
+/* Expanded previously by DELVE....;;(を手に取り|を手にとり);;JPParticleWO;-;JPVerbNoun;Join;Join;Join;
 
 
 
@@ -36034,7 +36050,7 @@
 ;;今期;;JPCon;
 ;;伐期;;JPCon;
 ;;花期;;JPCon;
-;;半期;;JPCon;
+;;半期;;JPCon;JPTime;
 ;;工期;;JPCon;
 ;;適期;;JPCon;
 ;;納期;;JPCon;
@@ -36691,7 +36707,7 @@
 ;;目的;;JPCon;
 ;;目標;;JPCon;
 ;;項目;;JPCon;
-;;品目;;JPCon;
+;;品目;;JPCon;JPCount;
 ;;科目;;JPCon;
 ;;種目;;JPCon;
 ;;目隠し;;JPCon;
@@ -40839,25 +40855,25 @@
 
 ;;h.pylori;;JPCon;
 ;;s&p;;JPCon;
-;;\(笑\);;JPExpressionNR;
-;;\(同\);;JPExpressionNR;
-;;\(注\);;JPExpressionNR;
-;;\(中略\);;JPExpressionNR;
+;;\(笑);;JPExpressionNR;
+;;\(同);;JPExpressionNR;
+;;\(注);;JPExpressionNR;
+;;\(中略);;JPExpressionNR;
 ;;以下同じ;;JPExpressionNR;
-;;\(株\);;JPExpressionNR;
-;;\(r\);;JPExpressionNR;
-;;\(tm\);;JPExpressionNR;
-;;\(日\);;JPYobi;
-;;\(月\);;JPYobi;
-;;\(火\);;JPYobi;
-;;\(水\);;JPYobi;
-;;\(木\);;JPYobi;
-;;\(金\);;JPYobi;
-;;\(土\);;JPYobi;
+;;\(株);;JPExpressionNR;
+;;\(r);;JPExpressionNR;
+;;\(tm);;JPExpressionNR;
+;;\(日);;JPYobi;
+;;\(月);;JPYobi;
+;;\(火);;JPYobi;
+;;\(水);;JPYobi;
+;;\(木);;JPYobi;
+;;\(金);;JPYobi;
+;;\(土);;JPYobi;
 ;;j;;JPAlphabet;
 ;;▽同、;;JPExpressionNR;Join;-;JPComma;
 ;;▽同\(;;JPExpressionNR;Join;-;BracketOpen;
-;;▽同\(同\);;JPExpressionNR;
+;;▽同\(同);;JPExpressionNR;
 ;;同;;JPCon;
 
 ;;i;;JPAlphabet;JPNumber;

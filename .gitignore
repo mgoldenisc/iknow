@@ -52,11 +52,18 @@
 # PyCharm generated files
 .idea/
 
+# new output of ref_testing.py
+/reference_materials/new_output/core/
+/reference_materials/new_output/test/
+/reference_materials/new_output/udct_test/
+
 # iknowpy build files
 /modules/iknowpy/build/
 /modules/iknowpy/dist/
 /modules/iknowpy/iknowpy.egg-info/
+/modules/iknowpy/.eggs
 /modules/iknowpy/iknowpy/engine.cpp
+/modules/iknowpy/iknowpy/engine.html
 __pycache__
 
 /thirdparty.zip
@@ -64,3 +71,6 @@ __pycache__
 # Synonym detection
 /modules/iknowpy/iknowpy/synonymdetection/datasets/testoutput*
 
+
+wheelhouse/
+*.bak

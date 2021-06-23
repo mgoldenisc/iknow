@@ -47,6 +47,8 @@ void build_one_language(string& csv, string& aho, string& ldata, string& langdev
 	} else
 		my_csv_generator.loadCSVdata(lang, false);
 
+	// my_csv_generator.writeIRISlexreps(langdev + lang + "_lexreps.csv"); // write lexreps.csv for IRIS
+
 	my_csv_generator.generateRAW();
 	my_csv_generator.generateAHO();
 }
@@ -74,7 +76,7 @@ int main(int argc, char* argv[])
 	}
 	string csv_path = repo_root + "language_models/";
 	string aho_path = repo_root + "modules/aho/";
-	string ldata_path = repo_root + "modules/engine/language_data";
+	string ldata_path = repo_root + "modules/aho/inl";
 	string langdev_path = repo_root + "language_development/";
 
 	string language_to_build;
