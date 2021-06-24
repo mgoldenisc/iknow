@@ -1,7 +1,6 @@
 from gensim.models import fasttext as ft
 from gensim.models.word2vec import Word2Vec
-from gensim.models.keyedvectors import FastTextKeyedVectors as FTKV
-from gensim.models.keyedvectors import Word2VecKeyedVectors as W2VKV
+from gensim.models.keyedvectors import KeyedVectors as KV
 import iknowpy
 import os
 
@@ -40,7 +39,7 @@ class IKSimilarityTools(object):
         -----------
         KeyError - if term is not found in the vocabulary
         """
-        if term.replace(" ", "_") in self.wordvectors.vocab:
+        if term.replace(" ", "_") in self.wordvectors.key_to_index:
             gensimpairs = self.wordvectors.most_similar(term.replace(" ", "_"), topn=num_similar)
         else:
             try:
@@ -334,7 +333,7 @@ class IKWord2VecTools(IKSimilarityTools):
         try:
             if pmodel_name[-4:] != '.bin':
                 pmodel_name = pmodel_name + '.bin'
-            self.wordvectors = W2VKV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
+            self.wordvectors = KV.load_word2vec_format(os.path.join(self.__PATH_PREFIX__, pmodel_name), binary=True)
         except FileNotFoundError as err:
             raise FileNotFoundError("Model with name {} not found.".format(pmodel_name[:-4])) from err
 
@@ -349,7 +348,7 @@ class IKSimilarityModeling():
         # build vocabulary
         try:
             corpus_path = SentenceIterator(corpus_path=corpus_path, use_iknow_entities=use_iknow_entities, tokenize_concepts=tokenize_concepts)
-            model.build_vocab(sentences=corpus_path)
+            model.build_vocab(corpus_iterable=corpus_path)
         except FileNotFoundError as err:
             raise FileNotFoundError('No corpus found at %s' % corpus_path) from err
         except RuntimeError as err:
@@ -359,7 +358,7 @@ class IKSimilarityModeling():
         print('Training model...\n')
         # train the model
         model.train(
-            sentences=corpus_path, epochs=epochs, total_examples=model.corpus_count
+            corpus_iterable=corpus_path, epochs=epochs, total_examples=model.corpus_count
         )
 
         print('Finished training model.\n')
@@ -370,10 +369,10 @@ class IKSimilarityModeling():
         # Note that you MUST pass in update=True to not destroy existing form of the model
         sentences = SentenceIterator(corpus_path, use_iknow_entities=use_iknow_entities, tokenize_concepts=tokenize_concepts)
 
-        model.build_vocab(sentences=sentences, update=True)
+        model.build_vocab(corpus_iterable=sentences, update=True)
         
         model.train(
-            sentences=sentences, total_examples=model.corpus_count, 
+            corpus_iterable=sentences, total_examples=model.corpus_count, 
             epochs=model.epochs
         )
 
@@ -442,7 +441,7 @@ class IKFastTextModeling(IKSimilarityModeling):
         if os.path.exists(os.path.join(model_path, pmodel_name)):
             raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
-        model = ft.FastText(size=psize, sg=1, min_count=pmin_count)
+        model = ft.FastText(vector_size=psize, sg=1, min_count=pmin_count)
 
         super().create_new_model(corpus_path, model, epochs)
 
@@ -551,7 +550,7 @@ class IKWord2VecModeling(IKSimilarityModeling):
         if os.path.exists(os.path.join(vector_path, pmodel_name)):
             raise FileExistsError("Model named {} already exists, model could not be created".format(pmodel_name[:-4]))
         
-        model = Word2Vec(size=psize, sg=1, min_count=pmin_count)
+        model = Word2Vec(vector_size=psize, sg=1, min_count=pmin_count)
 
         super().create_new_model(corpus_path, model, epochs)
 
